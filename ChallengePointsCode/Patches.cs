@@ -1,7 +1,10 @@
 using HarmonyLib;
 using Godot;
+using System.Reflection;
+using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -38,6 +41,56 @@ internal static class NewRunPatch
             modifiers = modifiers.Append(contract).ToArray();
         }
         catch (Exception ex) { MainFile.Logger.Error($"[ChallengePoints] contract creation failed: {ex}"); }
+    }
+}
+
+// Neow uses the presence of any ModifierModel as a signal to show only
+// modifier-provided Neow choices. ChallengeContract is a gameplay modifier,
+// but intentionally has no Neow choice, so hide it only while vanilla Neow
+// options are being generated.
+[HarmonyPatch(typeof(Neow), "GenerateInitialOptions")]
+internal static class ChallengeNeowCompatibilityPatch
+{
+    private static readonly MethodInfo OriginalMethod =
+        AccessTools.Method(typeof(Neow), "GenerateInitialOptions")
+        ?? throw new MissingMethodException(typeof(Neow).FullName, "GenerateInitialOptions");
+
+    private static readonly MethodInfo SetModifiersMethod =
+        AccessTools.PropertySetter(typeof(RunState), nameof(RunState.Modifiers))
+        ?? throw new MissingMethodException(typeof(RunState).FullName, "set_Modifiers");
+
+    [ThreadStatic]
+    private static bool _reentrant;
+
+    private static bool Prefix(Neow __instance, ref IReadOnlyList<EventOption> __result)
+    {
+        if (_reentrant || __instance.Owner is not { } owner)
+            return true;
+
+        IReadOnlyList<ModifierModel> modifiers = owner.RunState.Modifiers;
+        if (!modifiers.Any(modifier => modifier is ChallengeContract) ||
+            modifiers.Any(modifier => modifier is not ChallengeContract))
+            return true;
+
+        try
+        {
+            _reentrant = true;
+            SetModifiersMethod.Invoke(owner.RunState, new object[] { Array.Empty<ModifierModel>() });
+            __result = (IReadOnlyList<EventOption>?)OriginalMethod.Invoke(__instance, null)
+                ?? Array.Empty<EventOption>();
+            MainFile.Logger.Info("[ChallengePoints] restored vanilla Neow blessing options for ChallengeContract.");
+            return false;
+        }
+        catch (Exception exception)
+        {
+            MainFile.Logger.Error($"[ChallengePoints] Neow compatibility patch failed: {exception}");
+            return true;
+        }
+        finally
+        {
+            SetModifiersMethod.Invoke(owner.RunState, new object[] { modifiers });
+            _reentrant = false;
+        }
     }
 }
 
