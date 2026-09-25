@@ -1,0 +1,12 @@
+{
+  "id": "ChallengePoints",
+  "name": "挑战点系统",
+  "author": "Codex",
+  "description": "双轨挑战点与挑战契约，通用与角色奖励独立计算。无需 BaseLib。",
+  "version": "v0.1.0",
+  "min_game_version": "0.107.1",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": true
+}

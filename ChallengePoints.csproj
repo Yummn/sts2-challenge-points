@@ -1,0 +1,31 @@
+<Project Sdk="Godot.NET.Sdk/4.5.1" InitialTargets="CheckDependencyPaths">
+  <Import Project=".\Sts2PathDiscovery.props" />
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>true</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ChallengePoints</RootNamespace>
+    <AssemblyName>ChallengePoints</AssemblyName>
+    <GodotDisabledSourceGenerators>GodotPluginsInitializer</GodotDisabledSourceGenerators>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);MSB3270</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Sts2TargetFlavor)' == 'mobile-v110'">
+    <DefineConstants>$(DefineConstants);STS2_V110</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(Sts2DataDir)')">
+    <Reference Include="0Harmony"><HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="sts2"><HintPath>$(Sts2DataDir)/sts2.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ChallengePointsCode\**\*.cs" />
+    <EmbeddedResource Include="ChallengePointsData.json" />
+    <EmbeddedResource Include="ChallengePointsAssets\contract_panel.png" />
+    <EmbeddedResource Include="ChallengePointsAssets\malleable_icon.png" />
+    <EmbeddedResource Include="ChallengePointsAssets\ambergris_potion.png" />
+    <None Include="ChallengePoints.json" />
+  </ItemGroup>
+  <Target Name="CheckDependencyPaths">
+    <Error Text="STS2 data missing: $(Sts2DataDir)" Condition="'$(Sts2DataDir)' == '' or !Exists('$(Sts2DataDir)')" />
+  </Target>
+</Project>

@@ -1,0 +1,587 @@
+[
+  {
+    "id": "G-01",
+    "role": "common",
+    "name": "敌人最大生命提高",
+    "description": "+10% / 级，最多 3 级",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-02",
+    "role": "common",
+    "name": "自己的最大生命减少",
+    "description": "-3 / 级，最多 3 级",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-03",
+    "role": "common",
+    "name": "初始金币降低",
+    "description": "每级使初始金币 -25，最多 3 级；不足部分按 0 处理。",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-04",
+    "role": "common",
+    "name": "商店价格上涨",
+    "description": "商店非免费商品基础价格每级 +10%；三级合计 +30%，最终价格向上取整。",
+    "cpPerRank": 2,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-05",
+    "role": "common",
+    "name": "金币获取降低",
+    "description": "本局取得金币的正收益每级 -10%；三级合计 -30%，每次收益向下取整，最低 0。",
+    "cpPerRank": 2,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-06",
+    "role": "common",
+    "name": "前数回合少抽牌",
+    "description": "每选 1 级，额外指定一个回合的正常回合开始抽牌数 -1：1 级仅第 1 回合；2 级第 1、2 回合；3 级第 1、2、3 回合。每回合至多因本词条少抽 1 张，不在首回合累减。",
+    "cpPerRank": 3,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-07",
+    "role": "common",
+    "name": "小怪不再掉落金卡",
+    "description": "将金卡改为蓝卡",
+    "cpPerRank": 2,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-08",
+    "role": "common",
+    "name": "休息相关生命上限惩罚",
+    "description": "选择休息并完成生命回复后，玩家的最大生命 -3；每次休息触发一次。",
+    "cpPerRank": 2,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-09",
+    "role": "common",
+    "name": "获得先古遗物时附加诅咒",
+    "description": "玩家获得一件先古遗物时，向自己的牌组加入 1 张随机诅咒。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-10",
+    "role": "common",
+    "name": "额外加入“进阶之灾”",
+    "description": "额外加入一张进阶之灾",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-11",
+    "role": "common",
+    "name": "获得诅咒时额外惩罚",
+    "description": "获得诅咒时再追加 获得一个相同的诅咒",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-12",
+    "role": "common",
+    "name": "敌人强化类词条",
+    "description": "每名敌人出现时，获得当前层数 × 3 层金属化；新召唤的敌人也按出现当时层数结算一次。",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-13",
+    "role": "common",
+    "name": "开局负面状态 A",
+    "description": "首回合开始时获得 1 层虚弱，重复选择增加层数",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-14",
+    "role": "common",
+    "name": "开局负面状态 B",
+    "description": "首回和开始时获得一层脆弱，重复选择，增加层数",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-15",
+    "role": "common",
+    "name": "商店删除卡牌服务使用次数",
+    "description": "玩家本局可使用的商店删牌服务总次数上限依等级为 5 / 4 / 3 次；跨商店累计，成功删牌后计数。",
+    "cpPerRank": 2,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-16",
+    "role": "common",
+    "name": "精英奖励封锁",
+    "description": "首个精英不掉落奖励；分三级，每增加一级，增加一个不掉落奖励的精英。",
+    "cpPerRank": 3,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-17",
+    "role": "common",
+    "name": "敌人再生",
+    "description": "敌人获得再生；第一级 3 层，后续每级增加 1 层。",
+    "cpPerRank": 3,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-18",
+    "role": "common",
+    "name": "敌人力量",
+    "description": "敌人开局增加 1 点力量。",
+    "cpPerRank": 2,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-19",
+    "role": "common",
+    "name": "少一张奖励牌",
+    "description": "战斗掉落卡牌奖励的选项由 3 个降为 2 个。",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-20",
+    "role": "common",
+    "name": "开局失去力量",
+    "description": "自己开局失去 1 点力量。",
+    "cpPerRank": 2,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-21",
+    "role": "common",
+    "name": "开局失去敏捷",
+    "description": "自己开局失去 1 点敏捷。",
+    "cpPerRank": 2,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-22",
+    "role": "common",
+    "name": "敌人壁垒",
+    "description": "敌人获得壁垒。",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-23",
+    "role": "common",
+    "name": "相邻火堆限制",
+    "description": "两个相邻火堆的选项不可相同。",
+    "cpPerRank": 3,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "G-24",
+    "role": "common",
+    "name": "药水损失",
+    "description": "拾取药水时药水消失；分三级，每增加一级，增加消失药水的数量。",
+    "cpPerRank": 2,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "G-25",
+    "role": "common",
+    "name": "首回合失血",
+    "description": "首回合开始时自己失去生命；第一级 1 点，后续每级增加 1 点。",
+    "cpPerRank": 1,
+    "maxRank": 3,
+    "selectable": true
+  },
+  {
+    "id": "IC-01",
+    "role": "ironclad",
+    "name": "“燃烧之血”战后回复量 -2",
+    "description": "“燃烧之血”战后回复量 -2",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-02",
+    "role": "ironclad",
+    "name": "奇数回合开始时 -1 力量",
+    "description": "奇数回合开始时 -1 力量",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-03",
+    "role": "ironclad",
+    "name": "消耗反噬",
+    "description": "每回合每消耗 2 张牌，向手牌加入 1 张伤口。",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-04",
+    "role": "ironclad",
+    "name": "血肉代价",
+    "description": "因自己打出的牌失去生命时，额外失去 1 点生命。",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-05",
+    "role": "ironclad",
+    "name": "易伤加深",
+    "description": "获得易伤时，额外获得 1 层易伤。",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-06",
+    "role": "ironclad",
+    "name": "偶数回合开始时 -1 力量",
+    "description": "偶数回合开始时 -1 力量",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-07",
+    "role": "ironclad",
+    "name": "“进阶之灾”被消耗相关：触发后失去 ",
+    "description": "“进阶之灾”被消耗相关：触发后失去 1 生命",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "IC-08",
+    "role": "ironclad",
+    "name": "虚弱免疫",
+    "description": "敌人无法获得虚弱。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-01",
+    "role": "regent",
+    "name": "回合结束时失去 1 星",
+    "description": "回合结束时失去 1 星",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-02",
+    "role": "regent",
+    "name": "负星惩罚",
+    "description": "星数为负时，每欠 2 星失去 1 点力量和敏捷。",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-03",
+    "role": "regent",
+    "name": "君王剑打出时 +1 费",
+    "description": "君王剑打出时 +1 费；保留时 -1 费，费用不低于初始费用",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-04",
+    "role": "regent",
+    "name": "每生成 2 张牌时",
+    "description": "每生成 2 张牌时，向手牌加入 1 张随机状态牌",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-05",
+    "role": "regent",
+    "name": "无色生成上限",
+    "description": "每回合最多生成 5 张无色牌，超出的牌立即移除。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-06",
+    "role": "regent",
+    "name": "回合结束时若有活力",
+    "description": "回合结束时若有活力，则失去两层活力",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-07",
+    "role": "regent",
+    "name": "君王剑保留时降低8锻造",
+    "description": "君王剑保留时降低8锻造，最多可以触发（当前层数）次",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "RG-08",
+    "role": "regent",
+    "name": "每回合第二次打出无色牌时失去 1 能",
+    "description": "每回合第二次打出无色牌时失去 1 能量",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-01",
+    "role": "necrobinder",
+    "name": "第 4回合开始时",
+    "description": "第 4回合开始时，奥斯提不为玩家分担伤害",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-02",
+    "role": "necrobinder",
+    "name": "每回合第一次打出灵魂时",
+    "description": "每回合第一次打出灵魂时，抽牌收益被限制为 1",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-03",
+    "role": "necrobinder",
+    "name": "每回合首次生成灵魂时",
+    "description": "每回合首次生成灵魂时，在抽牌堆顶部加入 1 张“眩晕”",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-04",
+    "role": "necrobinder",
+    "name": "灾厄逆流",
+    "description": "灾厄大于当前生命的敌人对玩家造成的伤害提高 50%。",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-05",
+    "role": "necrobinder",
+    "name": "回合结束时",
+    "description": "回合结束时，奥斯蒂受到 2 点伤害",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-06",
+    "role": "necrobinder",
+    "name": "回合开始时",
+    "description": "回合开始时，所有敌人失去5点灾厄",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-07",
+    "role": "necrobinder",
+    "name": "回合结束时若消耗“虚无”牌",
+    "description": "回合结束时若消耗“虚无”牌，下回合开始失去 1 能量",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "NB-08",
+    "role": "necrobinder",
+    "name": "每回合第 2 次打出“虚无”牌时失去",
+    "description": "每回合第 2 次打出“虚无”牌时失去 1 能量",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-01",
+    "role": "silent",
+    "name": "“蛇之戒指”额外抽牌 -1",
+    "description": "“蛇之戒指”额外抽牌 -1",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-02",
+    "role": "silent",
+    "name": "每回合首次从卡牌中抽牌时",
+    "description": "每回合首次从卡牌中抽牌时，将一张眩晕放在抽牌堆顶部",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-03",
+    "role": "silent",
+    "name": "敌人坚韧",
+    "description": "每名敌人出现时获得 2 层坚韧；每次被攻击命中后获得相应格挡，层数加 1。",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-04",
+    "role": "silent",
+    "name": "奇巧耗能",
+    "description": "每回合每打出 2 张奇巧牌，失去 1 点能量。",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-05",
+    "role": "silent",
+    "name": "连打疲劳",
+    "description": "每回合打出 12 张牌后，再打出每张牌失去 1 点能量。",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-06",
+    "role": "silent",
+    "name": "毒素衰减",
+    "description": "敌人回合开始时，中毒额外减少 1 层。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-07",
+    "role": "silent",
+    "name": "敌人的中毒层数不能超过 50",
+    "description": "敌人的中毒层数不能超过 50",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "SL-08",
+    "role": "silent",
+    "name": "虚弱反噬",
+    "description": "使敌人获得虚弱时，其获得 1 点临时力量。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-01",
+    "role": "defect",
+    "name": "每获得 1 点集中",
+    "description": "每获得 1 点集中，失去 1 点力量",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-02",
+    "role": "defect",
+    "name": "基础球上限",
+    "description": "闪电和冰霜充能球的数值最多为 33。",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-03",
+    "role": "defect",
+    "name": "每打出 1 张能力牌",
+    "description": "每打出 1 张能力牌，受到 4点伤害",
+    "cpPerRank": 7,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-04",
+    "role": "defect",
+    "name": "状态牌回流",
+    "description": "每回合每有 2 张状态牌进入弃牌堆，将第 2 张改放到抽牌堆顶部。",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-05",
+    "role": "defect",
+    "name": "从第 6 回合开始",
+    "description": "从第 6 回合开始，每回合 -1 集中",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-06",
+    "role": "defect",
+    "name": "高级球限制",
+    "description": "黑暗球数值上限为 33；等离子球数值减少 1，最低为 0。",
+    "cpPerRank": 6,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-07",
+    "role": "defect",
+    "name": "每回合第 2 次打出 0 费牌时失去",
+    "description": "每回合第 2 次打出 0 费牌时失去 1 能量",
+    "cpPerRank": 8,
+    "maxRank": 1,
+    "selectable": true
+  },
+  {
+    "id": "DF-08",
+    "role": "defect",
+    "name": "能力牌上限",
+    "description": "每回合至多打出 3 张能力牌。",
+    "cpPerRank": 4,
+    "maxRank": 1,
+    "selectable": true
+  }
+]
