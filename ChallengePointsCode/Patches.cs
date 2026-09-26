@@ -7,8 +7,75 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.Nodes;
 
 namespace ChallengePoints;
+
+[HarmonyPatch(typeof(AscensionHelper), nameof(AscensionHelper.GetHoverTip))]
+internal static class ChallengeAscensionPortraitTextPatch
+{
+    private static void Prefix(int level)
+    {
+        try
+        {
+            LocManager manager = LocManager.Instance;
+            LocTable table = manager.GetTable("ascension");
+            bool chinese = manager.Language?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true;
+            Dictionary<string, string> missing = ChallengeAscensionTextFallback.MissingTitles(level, table.HasEntry, chinese);
+            if (missing.Count == 0) return;
+            table.MergeWith(missing);
+            MainFile.Logger.Warn($"[ChallengePoints] repaired missing ascension portrait titles: {string.Join(", ", missing.Keys)}; difficulty unchanged.");
+        }
+        catch (Exception ex)
+        {
+            MainFile.Logger.Error($"[ChallengePoints] ascension portrait text repair failed: {ex}");
+        }
+    }
+}
+
+[HarmonyPatch(typeof(NGame), nameof(NGame.StartNewSingleplayerRun))]
+internal static class ChallengeNewRunTracePatch
+{
+    private static void Prefix(CharacterModel __0, int __6)
+    {
+        string role = ChallengeCatalog.NormalizeRole(__0.Id.Entry);
+        MainFile.Logger.Info($"[ChallengePoints] new run requested: character={__0.Id.Entry}, ascension={__6}, common={ChallengeSelection.Score("common")}, role={ChallengeSelection.Score(role)}.");
+    }
+
+    private static void Postfix(ref Task<RunState> __result)
+    {
+        __result = ChallengeStartupFlow.Observe(__result,
+            () => MainFile.Logger.Info("[ChallengePoints] new run startup completed."),
+            ex => MainFile.Logger.Error($"[ChallengePoints] new run startup failed before completion: {ex}"));
+    }
+}
+
+[HarmonyPatch(typeof(NRun), nameof(NRun._Ready))]
+internal static class ChallengeRunUiTracePatch
+{
+    private static void Prefix() => MainFile.Logger.Info("[ChallengePoints] run UI initialization begin.");
+    private static void Postfix() => MainFile.Logger.Info("[ChallengePoints] run UI initialization complete.");
+    private static Exception? Finalizer(Exception? __exception)
+    {
+        if (__exception is not null)
+            MainFile.Logger.Error($"[ChallengePoints] run UI initialization failed: {__exception}");
+        return __exception;
+    }
+}
+
+[HarmonyPatch(typeof(RunManager), nameof(RunManager.GenerateMap))]
+internal static class ChallengeMapTracePatch
+{
+    private static void Prefix() => MainFile.Logger.Info("[ChallengePoints] map generation begin.");
+    private static void Postfix(ref Task __result)
+    {
+        __result = ChallengeStartupFlow.Observe(__result,
+            () => MainFile.Logger.Info("[ChallengePoints] map generation complete."),
+            ex => MainFile.Logger.Error($"[ChallengePoints] map generation failed: {ex}"));
+    }
+}
 
 [HarmonyPatch(typeof(NCharacterSelectScreen), "_Ready")]
 internal static class CharacterSelectPatch
@@ -39,6 +106,7 @@ internal static class NewRunPatch
             contract.CharacterRole = role;
             contract.ContractData = ChallengeSelection.Snapshot(role);
             modifiers = modifiers.Append(contract).ToArray();
+            MainFile.Logger.Info("[ChallengePoints] challenge contract attached to new run.");
         }
         catch (Exception ex) { MainFile.Logger.Error($"[ChallengePoints] contract creation failed: {ex}"); }
     }

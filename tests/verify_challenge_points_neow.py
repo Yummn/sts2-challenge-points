@@ -19,8 +19,8 @@ require("OriginalMethod.Invoke(__instance, null)", "vanilla Neow option generati
 require("SetModifiersMethod.Invoke(owner.RunState", "modifier list restoration")
 require("restored vanilla Neow blessing options", "diagnostic log")
 
-if '"version": "v0.1.2"' not in MANIFEST:
-    raise AssertionError("manifest version must be v0.1.2")
+if '"version": "v0.1.3"' not in MANIFEST:
+    raise AssertionError("manifest version must be v0.1.3")
 
 CONTRACT = (ROOT / "ChallengePointsCode" / "ChallengeContract.cs").read_text(encoding="utf-8")
 room_hook = CONTRACT.split("public override Task AfterRoomEntered", 1)[1].split("internal async Task GrantStartupRewardsAfterFadeIn", 1)[0]
@@ -36,5 +36,14 @@ require('[HarmonyPatch(typeof(RunManager), "FadeIn")]', "private/public compatib
 require("ChallengeStartupFlow.AfterFade", "await fade before rewards")
 FLOW = (ROOT / "ChallengePointsCode" / "ChallengeStartupFlow.cs").read_text(encoding="utf-8")
 assert FLOW.index("await fade;") < FLOW.index("await grantRewards();")
+require("ChallengeAscensionPortraitTextPatch", "ascension portrait missing-text guard")
+require("table.HasEntry", "preserve existing localized and fallback entries")
+require("table.MergeWith(missing)", "merge only missing portrait titles")
+require("ChallengeNewRunTracePatch", "new-game startup diagnostics")
+require("ChallengeRunUiTracePatch", "run UI startup diagnostics")
+require("ChallengeMapTracePatch", "map startup diagnostics")
+require("return __exception;", "preserve actual startup failures")
+assert "AscensionLevel =" not in SOURCE
+assert "ref int level" not in SOURCE
 
 print("ChallengePoints Neow compatibility checks passed.")

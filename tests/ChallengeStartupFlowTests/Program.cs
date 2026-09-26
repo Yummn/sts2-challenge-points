@@ -53,4 +53,53 @@ MethodInfo target = manager.GetMethod("FadeIn", BindingFlags.Public | BindingFla
 Require(target is not null && target.ReturnType == typeof(Task), "FadeIn hook target missing or incompatible");
 Require(manager.GetMethod("DebugOnlyGetState", BindingFlags.Instance | BindingFlags.Public) is not null,
     "run state getter missing");
+Type helper = game.GetType("MegaCrit.Sts2.Core.Helpers.AscensionHelper", true)!;
+MethodInfo hover = helper.GetMethod("GetHoverTip")!;
+Require(hover.GetParameters().Any(p => p.Name == "level" && p.ParameterType == typeof(int)),
+    "portrait fallback Harmony parameter missing");
+Type nGame = game.GetType("MegaCrit.Sts2.Core.Nodes.NGame", true)!;
+MethodInfo start = nGame.GetMethod("StartNewSingleplayerRun")!;
+Require(start.GetParameters()[0].ParameterType.FullName == "MegaCrit.Sts2.Core.Models.CharacterModel"
+    && start.GetParameters()[6].ParameterType == typeof(int)
+    && start.ReturnType.IsGenericType && start.ReturnType.GetGenericTypeDefinition() == typeof(Task<>),
+    "new-run diagnostic hook signature incompatible");
+Require(manager.GetMethod("GenerateMap")!.ReturnType == typeof(Task), "map diagnostic hook incompatible");
+Require(game.GetType("MegaCrit.Sts2.Core.Nodes.NRun", true)!.GetMethod("_Ready")!.ReturnType == typeof(void),
+    "run UI diagnostic hook incompatible");
+
+MethodInfo missingTitles = mod.GetType("ChallengePoints.ChallengeAscensionTextFallback", true)!
+    .GetMethod("MissingTitles", BindingFlags.NonPublic | BindingFlags.Static)!;
+Dictionary<string, string> Missing(int level, Func<string, bool> has, bool chinese) =>
+    (Dictionary<string, string>)missingTitles.Invoke(null, [level, has, chinese])!;
+var existing = Enumerable.Range(1, 10).Select(i => $"LEVEL_{i:D2}.title").ToHashSet();
+Dictionary<string, string> replacements = Missing(20, existing.Contains, true);
+Require(replacements.Count == 10 && replacements.ContainsKey("LEVEL_11.title"), "missing LEVEL_11 not repaired");
+Require(existing.All(k => !replacements.ContainsKey(k)), "existing official titles overwritten");
+existing.UnionWith(replacements.Keys);
+Require(Missing(20, existing.Contains, true).Count == 0, "fallback not idempotent");
+Require(Missing(10, existing.Contains, true).Count == 0, "valid ascension modified");
+Require(Missing(0, _ => false, true).Count == 0 && Missing(-1, _ => false, true).Count == 0,
+    "zero/negative ascension incorrectly populated");
+Require(Missing(11, k => k != "LEVEL_11.title", false)["LEVEL_11.title"].Contains("unavailable"),
+    "English fallback missing");
+
+MethodInfo observe = afterFade.DeclaringType!.GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+    .Single(m => m.Name == "Observe" && !m.IsGenericMethod);
+int completeCalls = 0;
+Exception? logged = null;
+var expected = new InvalidOperationException("simulated UI init error");
+Task failed = (Task)observe.Invoke(null, [Task.FromException(expected), (Action)(() => completeCalls++),
+    (Action<Exception>)(ex => logged = ex)])!;
+try { await failed; throw new Exception("diagnostic observer swallowed original error"); }
+catch (InvalidOperationException ex) { Require(ReferenceEquals(ex, expected), "original error replaced"); }
+Require(ReferenceEquals(logged, expected) && completeCalls == 0, "diagnostic callbacks incorrect");
+await (Task)observe.Invoke(null, [Task.CompletedTask, (Action)(() => completeCalls++),
+    (Action<Exception>)(ex => logged = ex)])!;
+Require(completeCalls == 1, "diagnostic success callback missing");
+MethodInfo genericObserve = afterFade.DeclaringType!.GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+    .Single(m => m.Name == "Observe" && m.IsGenericMethod).MakeGenericMethod(typeof(int));
+int observedResult = await (Task<int>)genericObserve.Invoke(null,
+    [Task.FromResult(42), (Action)(() => completeCalls++), (Action<Exception>)(ex => logged = ex)])!;
+Require(observedResult == 42 && completeCalls == 2, "new-run observer changed result");
 Console.WriteLine($"PASS: {Path.GetFileName(modPath)} flow ordering, interactive gate, failed/cancelled fades, game hook signatures.");
+Console.WriteLine("PASS: missing LEVEL_11 fallback, official text preservation, repeat calls, zero-level, English, startup diagnostics preserve result/error.");

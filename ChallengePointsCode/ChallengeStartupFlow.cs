@@ -8,4 +8,16 @@ internal static class ChallengeStartupFlow
         await fade;
         await grantRewards();
     }
+
+    internal static async Task Observe(Task task, Action complete, Action<Exception> failed)
+    {
+        try { await task; complete(); }
+        catch (Exception ex) { failed(ex); throw; }
+    }
+
+    internal static async Task<T> Observe<T>(Task<T> task, Action complete, Action<Exception> failed)
+    {
+        try { T result = await task; complete(); return result; }
+        catch (Exception ex) { failed(ex); throw; }
+    }
 }
