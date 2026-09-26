@@ -94,6 +94,34 @@ internal static class ChallengeNeowCompatibilityPatch
     }
 }
 
+// FadeIn is private in PC v107.1 and public in mobile v110.1.
+[HarmonyPatch(typeof(RunManager), "FadeIn")]
+internal static class ChallengeStartupRewardsFadePatch
+{
+    private static void Postfix(RunManager __instance, ref Task __result)
+    {
+        // Capture the current run. FadeIn can also be invoked while closing a
+        // reward screen; the contract's one-shot/reentrancy guards handle that.
+        RunState? run = __instance.DebugOnlyGetState();
+        if (run is null || !run.Modifiers.Any(x => x is ChallengeContract)) return;
+        __result = ChallengeStartupFlow.AfterFade(__result, async () =>
+        {
+            if (!ReferenceEquals(__instance.DebugOnlyGetState(), run)) return;
+            MainFile.Logger.Info("[ChallengePoints] room fade-in completed; checking startup rewards.");
+            foreach (ChallengeContract contract in run.Modifiers.OfType<ChallengeContract>())
+            {
+                try { await contract.GrantStartupRewardsAfterFadeIn(); }
+                catch (Exception ex)
+                {
+                    // Do not strand the now-visible Neow screen if a reward
+                    // supplied by another mod fails during its own callback.
+                    MainFile.Logger.Error($"[ChallengePoints] startup reward failed after fade-in: {ex}");
+                }
+            }
+        });
+    }
+}
+
 [HarmonyPatch(typeof(PowerModel), "get_Icon")]
 internal static class MalleableSmallIconPatch
 {

@@ -423,15 +423,14 @@ public sealed class ChallengeContract : ModifierModel
             await PowerCmd.Apply<StrengthPower>(context, power.Owner, -amount, null, null);
     }
 
-    public override async Task AfterRoomEntered(AbstractRoom room)
+    public override Task AfterRoomEntered(AbstractRoom room)
     {
+        MainFile.Logger.Info($"[ChallengePoints] room entered: type={room.RoomType}, common={CommonCp}, startupGranted={StartupRewardsGranted}; interactive rewards deferred.");
         if (room is MerchantRoom && !FirstShopSeen)
         {
             FirstShopSeen = true;
             FirstShopFloor = base.RunState.TotalFloor;
         }
-        if (StartupRewardsGranted) return;
-        StartupRewardsGranted = true;
         foreach (Player player in base.RunState.Players)
         {
             if (CharacterRole == "ironclad" && Rank("IC-01") > 0 && !BurningBloodAdjusted)
@@ -442,15 +441,47 @@ public sealed class ChallengeContract : ModifierModel
                     BurningBloodAdjusted = true;
                 }
             }
-            if (CommonCp >= 15) await GiveRelic(player, "护喉甲");
-            if (CommonCp >= 20) await GiveRelic(player, "小扭蛋");
-            if (CommonCp >= 35)
-            {
-                _grantingStartupPotion = true;
-                try { await GivePotion(player, "龙涎香"); }
-                finally { _grantingStartupPotion = false; }
-            }
         }
+        // EventRoom.Enter awaits this hook BEFORE RunManager.FadeIn. In
+        // particular SmallCapsule.AfterObtained waits for a reward screen to
+        // close, which cannot be clicked behind the transition's black veil.
+        // Interactive rewards are granted by the post-FadeIn hook instead.
+        return Task.CompletedTask;
+    }
+
+    private bool _grantingStartupRewards;
+
+    internal async Task GrantStartupRewardsAfterFadeIn()
+    {
+        if (StartupRewardsGranted || _grantingStartupRewards) return;
+        _grantingStartupRewards = true;
+        StartupRewardsGranted = true;
+        try
+        {
+            MainFile.Logger.Info($"[ChallengePoints] startup rewards begin after room fade-in: common={CommonCp}, role={RoleCp}.");
+            foreach (Player player in base.RunState.Players)
+            {
+                if (CommonCp >= 15)
+                {
+                    MainFile.Logger.Info("[ChallengePoints] granting startup Gorget.");
+                    await GiveRelic(player, "护喉甲");
+                }
+                if (CommonCp >= 20)
+                {
+                    MainFile.Logger.Info("[ChallengePoints] granting startup SmallCapsule; reward window is now visible.");
+                    await GiveRelic(player, "小扭蛋");
+                    MainFile.Logger.Info("[ChallengePoints] startup SmallCapsule reward window closed.");
+                }
+                if (CommonCp >= 35)
+                {
+                    _grantingStartupPotion = true;
+                    try { await GivePotion(player, "龙涎香"); }
+                    finally { _grantingStartupPotion = false; }
+                }
+            }
+            MainFile.Logger.Info("[ChallengePoints] startup rewards complete.");
+        }
+        finally { _grantingStartupRewards = false; }
     }
 
     public override bool TryModifyRewards(Player player, List<Reward> rewards, AbstractRoom? room)

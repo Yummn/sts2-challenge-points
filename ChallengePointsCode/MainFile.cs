@@ -25,6 +25,6 @@ public partial class MainFile : Node
         if (System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_SMOKE") == "1"
             && Engine.GetMainLoop() is SceneTree tree && tree.Root is not null)
             tree.Root.CallDeferred(Node.MethodName.AddChild, new SmokeRunner());
-        Logger.Info($"[ChallengePoints] loaded v0.1.0; catalog={ChallengeCatalog.All.Count} challenges.");
+        Logger.Info($"[ChallengePoints] loaded v0.1.2; startup rewards wait for room fade-in; catalog={ChallengeCatalog.All.Count} challenges.");
     }
 }
