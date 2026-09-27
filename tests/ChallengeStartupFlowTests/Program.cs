@@ -103,3 +103,10 @@ int observedResult = await (Task<int>)genericObserve.Invoke(null,
 Require(observedResult == 42 && completeCalls == 2, "new-run observer changed result");
 Console.WriteLine($"PASS: {Path.GetFileName(modPath)} flow ordering, interactive gate, failed/cancelled fades, game hook signatures.");
 Console.WriteLine("PASS: missing LEVEL_11 fallback, official text preservation, repeat calls, zero-level, English, startup diagnostics preserve result/error.");
+
+Type saveManager = game.GetType("MegaCrit.Sts2.Core.Saves.SaveManager", true)!;
+MethodInfo saveRun = saveManager.GetMethod("SaveRun")!;
+Require(saveRun.ReturnType == typeof(Task) && saveRun.GetParameters().Length == 2
+    && saveRun.GetParameters()[0].ParameterType.FullName == "MegaCrit.Sts2.Core.Rooms.AbstractRoom"
+    && saveRun.GetParameters()[1].ParameterType == typeof(bool), "startup persistence save ABI incompatible");
+Console.WriteLine("PASS: startup persistence save ABI is Task SaveRun(AbstractRoom, bool).");

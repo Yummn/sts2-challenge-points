@@ -25,6 +25,6 @@ public partial class MainFile : Node
         if (System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_SMOKE") == "1"
             && Engine.GetMainLoop() is SceneTree tree && tree.Root is not null)
             tree.Root.CallDeferred(Node.MethodName.AddChild, new SmokeRunner());
-        Logger.Info($"[ChallengePoints] loaded v0.1.3; ascension portrait text guard and startup stage tracing enabled; catalog={ChallengeCatalog.All.Count} challenges.");
+        Logger.Info($"[ChallengePoints] loaded v0.1.4; ascension portrait text guard and startup stage tracing enabled; catalog={ChallengeCatalog.All.Count} challenges.");
     }
 }

@@ -22,6 +22,7 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves.Runs;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.ValueProps;
 
 namespace ChallengePoints;
@@ -478,6 +479,15 @@ public sealed class ChallengeContract : ModifierModel
                     try { await GivePotion(player, "龙涎香"); }
                     finally { _grantingStartupPotion = false; }
                 }
+            }
+            // Room-entry saving happens before FadeIn. Rewards are deliberately
+            // later, so persist their inventory and one-shot flag together after
+            // interaction completes. Never overwrite a mid-combat checkpoint.
+            if (RunManager.Instance.ShouldSave && base.RunState.CurrentRoom is EventRoom &&
+                ReferenceEquals(RunManager.Instance.DebugOnlyGetState(), base.RunState))
+            {
+                await SaveManager.Instance.SaveRun(null, false);
+                MainFile.Logger.Info("[ChallengePoints] startup rewards and granted flag persisted.");
             }
             MainFile.Logger.Info("[ChallengePoints] startup rewards complete.");
         }
