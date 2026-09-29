@@ -1,9 +1,10 @@
 from pathlib import Path
+import json
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "ChallengePointsCode" / "Patches.cs").read_text(encoding="utf-8")
-MANIFEST = (ROOT / "ChallengePoints.json").read_text(encoding="utf-8")
+MANIFEST = json.loads((ROOT / "ChallengePoints.json").read_text(encoding="utf-8"))
 
 
 def require(text: str, label: str) -> None:
@@ -19,8 +20,9 @@ require("OriginalMethod.Invoke(__instance, null)", "vanilla Neow option generati
 require("SetModifiersMethod.Invoke(owner.RunState", "modifier list restoration")
 require("restored vanilla Neow blessing options", "diagnostic log")
 
-if '"version": "v0.1.3"' not in MANIFEST:
-    raise AssertionError("manifest version must be v0.1.3")
+version = tuple(int(part) for part in MANIFEST["version"].lstrip("v").split("."))
+if version < (0, 1, 3):
+    raise AssertionError("manifest version must be at least v0.1.3")
 
 CONTRACT = (ROOT / "ChallengePointsCode" / "ChallengeContract.cs").read_text(encoding="utf-8")
 room_hook = CONTRACT.split("public override Task AfterRoomEntered", 1)[1].split("internal async Task GrantStartupRewardsAfterFadeIn", 1)[0]
