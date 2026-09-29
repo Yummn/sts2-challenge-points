@@ -40,6 +40,7 @@ public sealed partial class ChallengeContract : ModifierModel
     [SavedProperty] public int ShopSchemaVersion { get; set; }
     [SavedProperty] public string RandomSquadId { get; set; } = "";
     [SavedProperty] public bool StartupRewardsGranted { get; set; }
+    [SavedProperty] public bool FruitKnifeMigrationApplied { get; set; }
     [SavedProperty] public bool FirstShopSeen { get; set; }
     [SavedProperty] public int MerchantCardPurchases { get; set; }
     [SavedProperty] public bool ShopTotemSpent { get; set; }
@@ -416,7 +417,19 @@ public sealed partial class ChallengeContract : ModifierModel
         return value;
     }
 
-    public override async Task AfterCreatureAddedToCombat(Creature creature)
+    // The game's AfterCreatureAddedToCombat hook is only dispatched for summons.
+    // Enemies present at encounter start must be handled separately here.
+    public override async Task BeforeCombatStart()
+    {
+        ICombatState? combat = base.RunState.Players.FirstOrDefault()?.Creature.CombatState;
+        if (combat is null) return;
+        foreach (Creature enemy in combat.Enemies.ToArray())
+            await ApplyChallengeEnemySetup(enemy);
+    }
+
+    public override Task AfterCreatureAddedToCombat(Creature creature) => ApplyChallengeEnemySetup(creature);
+
+    private async Task ApplyChallengeEnemySetup(Creature creature)
     {
         if (creature.Side != CombatSide.Enemy) return;
         int hpRank = Rank("G-01");
@@ -428,7 +441,7 @@ public sealed partial class ChallengeContract : ModifierModel
         }
         var context = new ThrowingPlayerChoiceContext();
         if (Rank("G-12") > 0)
-            await PowerCmd.Apply<PlatingPower>(context, creature, Math.Max(1, base.RunState.TotalFloor) * 3, null, null);
+            await PowerCmd.Apply<PlatingPower>(context, creature, Rank("G-12") * 3, null, null);
         if (Rank("G-17") > 0)
             await PowerCmd.Apply<RegenPower>(context, creature, 2 + Rank("G-17"), null, null);
         if (Rank("G-18") > 0)
@@ -586,8 +599,20 @@ public sealed partial class ChallengeContract : ModifierModel
 
     internal async Task GrantStartupRewardsAfterFadeIn()
     {
-        if (StartupRewardsGranted || _grantingStartupRewards) return;
+        if (_grantingStartupRewards) return;
         _grantingStartupRewards = true;
+        if (StartupRewardsGranted)
+        {
+            try
+            {
+                if (await EnsureFruitKnifeForExistingRun() && RunManager.Instance.ShouldSave &&
+                    base.RunState.CurrentRoom is not CombatRoom &&
+                    ReferenceEquals(RunManager.Instance.DebugOnlyGetState(), base.RunState))
+                    await SaveManager.Instance.SaveRun(null, false);
+            }
+            finally { _grantingStartupRewards = false; }
+            return;
+        }
         StartupRewardsGranted = true;
         try
         {
@@ -618,6 +643,7 @@ public sealed partial class ChallengeContract : ModifierModel
                     finally { _grantingStartupPotion = false; }
                 }
             }
+            await EnsureFruitKnifeForExistingRun();
             // Room-entry saving happens before FadeIn. Rewards are deliberately
             // later, so persist their inventory and one-shot flag together after
             // interaction completes. Never overwrite a mid-combat checkpoint.
@@ -630,6 +656,24 @@ public sealed partial class ChallengeContract : ModifierModel
             MainFile.Logger.Info("[ChallengePoints] startup rewards complete.");
         }
         finally { _grantingStartupRewards = false; }
+    }
+
+    private async Task<bool> EnsureFruitKnifeForExistingRun()
+    {
+        if (ShopSchemaVersion <= 0 || FruitKnifeMigrationApplied || base.RunState.CurrentRoom is CombatRoom)
+            return false;
+        foreach (Player player in base.RunState.Players)
+        {
+            if (SquadRank("SQ-07") < 3) continue;
+            if (!player.Relics.Any(r => r is ChallengeFruitKnifeRelic))
+                await GiveRelic(player, "水果刀");
+            // v0.2.2 incorrectly granted a card. Replace only that obsolete
+            // squad-only card; do not touch cards the player transformed it into.
+            foreach (CardModel obsolete in player.Deck.Cards.OfType<ChallengeMeatCleaver>().ToArray())
+                await CardPileCmd.RemoveFromDeck(obsolete, showPreview: false);
+        }
+        FruitKnifeMigrationApplied = true;
+        return true;
     }
 
     public override bool TryModifyRewards(Player player, List<Reward> rewards, AbstractRoom? room)
@@ -701,6 +745,11 @@ public sealed partial class ChallengeContract : ModifierModel
 
     private static async Task GiveRelic(Player player, string name)
     {
+        if (name == "水果刀")
+        {
+            await RelicCmd.Obtain(ModelDb.Relic<ChallengeFruitKnifeRelic>().ToMutable(), player);
+            return;
+        }
         string id = name switch { "护喉甲" => "GORGET", "小扭蛋" => "SMALL_CAPSULE", "万花筒" => "KALEIDOSCOPE", _ => name };
         RelicModel? relic = ModelDb.AllRelics.FirstOrDefault(x => x.Id.Entry == id)
             ?? ModelDb.AllRelics.FirstOrDefault(x => x.Title.GetFormattedText().Equals(name, StringComparison.Ordinal));
@@ -938,7 +987,7 @@ public sealed partial class ChallengeContract : ModifierModel
             if (CharacterRole == "necrobinder" && Rank("NB-05") > 0 && player.Osty is { IsAlive: true } osty)
                 osty.LoseHpInternal(2, ValueProp.Unblockable | ValueProp.Unpowered);
             if (ShopSchemaVersion > 0 && HasShopItem("IT-04"))
-                await CreatureCmd.GainBlock(player.Creature, 1m, ValueProp.Unpowered, null);
+                await CreatureCmd.GainBlock(player.Creature, 5m, ValueProp.Unpowered, null);
         }
         ColorlessPlayedThisTurn = ZeroCostPlayedThisTurn = PowerPlayedThisTurn = 0;
         ExhaustedThisTurn = GeneratedThisTurn = SoulGeneratedThisTurn = VoidPlayedThisTurn = 0;
@@ -951,15 +1000,20 @@ public sealed partial class ChallengeContract : ModifierModel
     public override Task AfterDeath(PlayerChoiceContext choiceContext, Creature creature, bool wasRemovalPrevented, float deathAnimLength)
     {
         if (ShopSchemaVersion <= 0 || SquadRank("SQ-07") < 4 ||
-            creature.Side != CombatSide.Enemy || wasRemovalPrevented) return Task.CompletedTask;
+            !creature.IsPrimaryEnemy || wasRemovalPrevented) return Task.CompletedTask;
         Player? player = base.RunState.Players.FirstOrDefault();
         if (player is null) return Task.CompletedTask;
-        var seen = new HashSet<CardModel>();
-        foreach (CardModel card in player.Deck.Cards.Concat(player.PlayerCombatState?.AllCards ?? Enumerable.Empty<CardModel>()))
+        IronWave[] candidates = player.Deck.Cards.OfType<IronWave>().ToArray();
+        IronWave? chosen = base.RunState.Rng.Niche.NextItem(candidates);
+        if (chosen is null) return Task.CompletedTask;
+        // Upgrade exactly one persistent deck card. Its active combat copy (if
+        // any) receives the same level so the change is visible immediately.
+        var seen = new HashSet<CardModel> { chosen };
+        chosen.UpgradeInternal();
+        chosen.FinalizeUpgradeInternal();
+        foreach (CardModel card in player.PlayerCombatState?.AllCards ?? Enumerable.Empty<CardModel>())
         {
-            if (!seen.Add(card) || card is not IronWave) continue;
-            // SQ-07 raises Iron Wave's MaxUpgradeLevel through Harmony so the
-            // native setter and save reconstruction accept every new level.
+            if (!ReferenceEquals(card.DeckVersion, chosen) || !seen.Add(card)) continue;
             card.UpgradeInternal();
             card.FinalizeUpgradeInternal();
         }

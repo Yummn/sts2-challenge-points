@@ -15,6 +15,8 @@ using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.ValueProps;
+using MegaCrit.Sts2.Core.Entities.RestSite;
+using MegaCrit.Sts2.Core.Models.Powers;
 using System.Reflection;
 
 namespace ChallengePoints;
@@ -52,6 +54,8 @@ internal sealed partial class SmokeRunner : Node
             ui.QueueFree();
             ChallengeContract canonical = ModelDb.Modifier<ChallengeContract>();
             ChallengeShopCards.EnsurePools();
+            if (ChallengeCatalog.Find("G-12")?.MaxRank != 3 || ModelDb.Relic<ChallengeFruitKnifeRelic>().Icon is null)
+                throw new InvalidOperationException("G-12 rank range or Fruit Knife relic registration failed");
             foreach (CardModel card in new CardModel[]
             {
                 ModelDb.Card<ChallengeLightVoucher>(), ModelDb.Card<ChallengeSpiritMaker>(),
@@ -143,10 +147,11 @@ internal sealed partial class SmokeRunner : Node
             var ironPlayer = Player.CreateForNewRun<Ironclad>(UnlockState.all, 2uL);
             var ironRun = RunState.CreateForTest(new[] { ironPlayer }, modifiers: new ModifierModel[] { shopIron });
             shopIron.OnRunCreated(ironRun);
-            if (ironPlayer.Deck.Cards.Count(c => c is MegaCrit.Sts2.Core.Models.Cards.IronWave) < 8 ||
-                !ironPlayer.Deck.Cards.Any(c => c is ChallengeMeatCleaver) ||
-                ironPlayer.Deck.Cards.Any(c => c.Id.Entry.Contains("STRIKE_IRONCLAD") || c.Id.Entry.Contains("DEFEND_IRONCLAD")))
-                throw new InvalidOperationException("SQ-07 starter replacement/custom card failed");
+            if (ironPlayer.Deck.Cards.Count(c => c is MegaCrit.Sts2.Core.Models.Cards.IronWave) != 5 ||
+                ironPlayer.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().Any(c => !c.IsUpgraded) ||
+                ironPlayer.Deck.Cards.Count(c => c.Id.Entry.Contains("DEFEND_IRONCLAD")) != 4 ||
+                ironPlayer.Deck.Cards.Any(c => c is ChallengeMeatCleaver || c.Id.Entry.Contains("STRIKE_IRONCLAD")))
+                throw new InvalidOperationException("SQ-07 strike replacement / wave upgrade / preserved defends failed");
             shopIron.MerchantCardPurchases = 3;
             ChallengeContract restoredShop = (ChallengeContract)ModifierModel.FromSerializable(shopIron.ToSerializable());
             if (restoredShop.ShopSchemaVersion != 1 || restoredShop.SquadRank("SQ-07") != 3 ||
@@ -155,20 +160,22 @@ internal sealed partial class SmokeRunner : Node
             var unlimited = (ChallengeContract)canonical.ToMutable();
             unlimited.ShopSchemaVersion = 1;
             unlimited.CharacterRole = "ironclad";
-            unlimited.ContractData = "{\"shop:ironclad:squad:SQ-07\":4,\"shop:ironclad:item:IT-08\":1}";
+            unlimited.ContractData = "{\"shop:ironclad:squad:SQ-07\":4}";
             var unlimitedPlayer = Player.CreateForNewRun<Ironclad>(UnlockState.all, 5uL);
             var unlimitedRun = RunState.CreateForTest(new[] { unlimitedPlayer }, modifiers: new ModifierModel[] { unlimited });
             unlimited.OnRunCreated(unlimitedRun);
-            var wave = unlimitedPlayer.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().First();
-            if (wave.CurrentUpgradeLevel != 1 || wave.MaxUpgradeLevel != int.MaxValue)
-                throw new InvalidOperationException("SQ-07/IT-08 upgrade synergy did not initialize");
+            var waves = unlimitedPlayer.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().ToArray();
+            int baselineLevels = waves.Sum(c => c.CurrentUpgradeLevel);
+            if (waves.Length != 5 || waves.Any(c => c.CurrentUpgradeLevel != 1 || c.MaxUpgradeLevel != int.MaxValue))
+                throw new InvalidOperationException("SQ-07 upgraded waves did not initialize");
             var defeated = new Creature(ModelDb.Monster<SpinyToad>().ToMutable(), CombatSide.Enemy, null);
             await unlimited.AfterDeath(new ThrowingPlayerChoiceContext(), defeated, false, 0);
             await unlimited.AfterDeath(new ThrowingPlayerChoiceContext(), defeated, false, 0);
-            if (wave.CurrentUpgradeLevel != 3)
-                throw new InvalidOperationException($"SQ-07 kill upgrades expected 3, got {wave.CurrentUpgradeLevel}");
-            CardModel reloadedWave = CardModel.FromSerializable(wave.ToSerializable());
-            if (reloadedWave.CurrentUpgradeLevel != 3)
+            if (waves.Sum(c => c.CurrentUpgradeLevel) != baselineLevels + 2)
+                throw new InvalidOperationException("SQ-07 must upgrade exactly one wave per non-minion kill");
+            CardModel advancedWave = waves.First(c => c.CurrentUpgradeLevel > 1);
+            CardModel reloadedWave = CardModel.FromSerializable(advancedWave.ToSerializable());
+            if (reloadedWave.CurrentUpgradeLevel != advancedWave.CurrentUpgradeLevel)
                 throw new InvalidOperationException("SQ-07 upgraded Iron Wave could not round-trip through card save");
             var shopSoul = (ChallengeContract)canonical.ToMutable();
             shopSoul.ShopSchemaVersion = 1;
@@ -211,11 +218,13 @@ internal sealed partial class SmokeRunner : Node
         };
         contract.ShopSchemaVersion = 1;
         bool choiceTest = mode == "choice";
-        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status";
+        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff";
         contract.ContractData = mode switch
         {
             "choice" => "{\"shop:ironclad:item:IT-03\":1}",
-            "battle" => "{\"shop:ironclad:squad:SQ-07\":4,\"shop:ironclad:item:IT-08\":1}",
+            "battle" => "{\"shop:ironclad:squad:SQ-07\":4}",
+            "buff" => "{\"G-01\":1,\"G-12\":3,\"G-17\":1,\"G-18\":1,\"G-22\":1,\"shop:ironclad:item:IT-04\":1}",
+            "fruit" => "{\"shop:ironclad:squad:SQ-07\":3}",
             "light" => "{\"shop:ironclad:squad:SQ-02\":2}",
             "soul" => "{\"shop:necrobinder:squad:SQ-03\":4}",
             "spirit" => "{\"shop:necrobinder:squad:SQ-09\":1}",
@@ -253,6 +262,32 @@ internal sealed partial class SmokeRunner : Node
             throw new InvalidOperationException($"new-run UI/Neow not ready: room={run.CurrentRoom?.GetType().Name}");
         if (scene.GetNodeOrNull<ChallengeContractHud>("ChallengeContractHud") is null)
             throw new InvalidOperationException("contract HUD missing from PC run");
+        if (mode == "fruit")
+        {
+            Player player = run.Players.Single();
+            if (!player.Relics.Any(r => r is ChallengeFruitKnifeRelic) ||
+                player.Deck.Cards.Any(c => c is ChallengeMeatCleaver))
+                throw new InvalidOperationException("SQ-07 III did not grant Fruit Knife relic instead of a card");
+            var option = RestSiteOption.Generate(player).OfType<ChallengeFruitKnifeRestSiteOption>().Single();
+            if (!option.IsEnabled || option.Icon is null)
+                throw new InvalidOperationException("Fruit Knife rest option or icon unavailable");
+            CardModel legacyCard = run.CreateCard(ModelDb.Card<ChallengeMeatCleaver>(), player);
+            player.Deck.AddInternal(legacyCard);
+            contract.FruitKnifeMigrationApplied = false;
+            await contract.GrantStartupRewardsAfterFadeIn();
+            if (!contract.FruitKnifeMigrationApplied || player.Deck.Cards.Contains(legacyCard) ||
+                player.Relics.Count(r => r is ChallengeFruitKnifeRelic) != 1)
+                throw new InvalidOperationException("v0.2.2 Fruit Knife card-to-relic migration failed");
+            CardModel selected = player.Deck.Cards.First(c => c.IsRemovable);
+            int deckCount = player.Deck.Cards.Count;
+            int hp = player.Creature.MaxHp;
+            await option.ApplySelectedCard(selected);
+            if (player.Deck.Cards.Count != deckCount - 1 || player.Creature.MaxHp != hp + 6)
+                throw new InvalidOperationException("Fruit Knife did not remove one card and grant 6 Max HP");
+            MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-07 Fruit Knife relic, campfire option, remove one card, +6 Max HP.");
+            GetTree().Quit(0);
+            return;
+        }
         if (battleTest)
         {
             var console = new DevConsole(shouldAllowDebugCommands: true);
@@ -263,6 +298,24 @@ internal sealed partial class SmokeRunner : Node
             if (!CombatManager.Instance.IsInProgress) throw new TimeoutException("PC combat did not start");
             Player player = run.Players.Single();
             ICombatState combat = player.Creature.CombatState ?? throw new InvalidOperationException("player combat state missing");
+            if (mode == "buff")
+            {
+                Creature enemy = combat.Enemies.First();
+                for (int i = 0; i < 60 && (enemy.GetPowerAmount<StrengthPower>() < 1 ||
+                    enemy.GetPowerAmount<RegenPower>() < 3 || !enemy.HasPower<BarricadePower>()); i++)
+                    await ToSignal(GetTree().CreateTimer(0.25), SceneTreeTimer.SignalName.Timeout);
+                MainFile.Logger.Info($"[ChallengePointsIntegration] initial buffs: plating={enemy.GetPowerAmount<PlatingPower>()}, strength={enemy.GetPowerAmount<StrengthPower>()}, regen={enemy.GetPowerAmount<RegenPower>()}, barricade={enemy.HasPower<BarricadePower>()}, hp={enemy.CurrentHp}/{enemy.MaxHp}, baseHp={enemy.MonsterMaxHpBeforeModification}");
+                if (enemy.GetPowerAmount<PlatingPower>() != 9 || enemy.GetPowerAmount<StrengthPower>() != 1 ||
+                    enemy.GetPowerAmount<RegenPower>() != 3 || !enemy.HasPower<BarricadePower>())
+                    throw new InvalidOperationException("initial enemy did not receive rank-based powers");
+                int block = player.Creature.Block;
+                await contract.AfterSideTurnEnd(new ThrowingPlayerChoiceContext(), CombatSide.Player, new[] { player.Creature });
+                if (player.Creature.Block != block + 5)
+                    throw new InvalidOperationException("diamond chestplate did not grant 5 Block");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: initial enemy 9 Plating / Strength / Regen / Barricade; IT-04 +5 Block.");
+                GetTree().Quit(0);
+                return;
+            }
             if (mode == "light")
             {
                 for (int i = 0; i < 100 && !PileType.Hand.GetPile(player).Cards.Any(c => c is ChallengeLightVoucher); i++)
@@ -309,22 +362,20 @@ internal sealed partial class SmokeRunner : Node
                 GetTree().Quit(0);
                 return;
             }
-            CardModel wave = player.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().First();
-            if (wave.CurrentUpgradeLevel != 1) throw new InvalidOperationException("IT-08 starter upgrade missing in live run");
-            CardModel generated = combat.CreateCard(ModelDb.Card<ChallengeMeatCleaver>(), player);
-            await CardPileCmd.AddGeneratedCardToCombat(generated, PileType.Hand, player);
-            await ToSignal(GetTree().CreateTimer(0.5), SceneTreeTimer.SignalName.Timeout);
-            CardModel cleaver = PileType.Hand.GetPile(player).Cards.Last(c => c is ChallengeMeatCleaver);
+            var waves = player.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().ToArray();
+            int baseline = waves.Sum(c => c.CurrentUpgradeLevel);
+            if (waves.Length != 5 || waves.Any(c => c.CurrentUpgradeLevel != 1))
+                throw new InvalidOperationException("SQ-07 initial Iron Waves are not all upgraded");
             Creature target = combat.HittableEnemies.First(c => c.IsAlive && c.IsHittable);
-            int hp = target.CurrentHp;
-            int block = player.Creature.Block;
-            await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), cleaver, target).WaitAsync(TimeSpan.FromSeconds(20));
-            if (target.CurrentHp >= hp || player.Creature.Block <= block || cleaver.Pile?.Type == PileType.Hand)
-                throw new InvalidOperationException("SQ-07 Meat Cleaver failed to play damage/block in PC combat");
             await CreatureCmd.Damage(new BlockingPlayerChoiceContext(), target, 999, ValueProp.Unpowered, player.Creature);
-            if (wave.CurrentUpgradeLevel != 2 || CardModel.FromSerializable(wave.ToSerializable()).CurrentUpgradeLevel != 2)
-                throw new InvalidOperationException("SQ-07 enemy kill did not persist unlimited Iron Wave upgrade");
-            MainFile.Logger.Info("[ChallengePointsIntegration] PASS: PC combat Meat Cleaver damage/block and SQ-07 kill upgrade/save.");
+            if (waves.Sum(c => c.CurrentUpgradeLevel) != baseline + 1 ||
+                !waves.Any(c => c.CurrentUpgradeLevel == 2 && CardModel.FromSerializable(c.ToSerializable()).CurrentUpgradeLevel == 2))
+                throw new InvalidOperationException("SQ-07 enemy kill did not upgrade exactly one persistent Iron Wave");
+            CardModel chosenWave = waves.Single(c => c.CurrentUpgradeLevel == 2);
+            if (player.PlayerCombatState?.AllCards.Where(c => ReferenceEquals(c.DeckVersion, chosenWave))
+                .Any(c => c.CurrentUpgradeLevel != 2) == true)
+                throw new InvalidOperationException("SQ-07 selected wave's combat copy did not receive the upgrade");
+            MainFile.Logger.Info("[ChallengePointsIntegration] PASS: PC combat SQ-07 upgraded exactly one Iron Wave and saved it.");
             GetTree().Quit(0);
             return;
         }

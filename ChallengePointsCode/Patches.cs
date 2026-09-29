@@ -15,8 +15,21 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Saves.Runs;
+using MegaCrit.Sts2.Core.Assets;
+using MegaCrit.Sts2.Core.Entities.RestSite;
 
 namespace ChallengePoints;
+
+[HarmonyPatch(typeof(RestSiteOption), "get_Icon")]
+internal static class ChallengeFruitKnifeRestIconPatch
+{
+    private static bool Prefix(RestSiteOption __instance, ref Texture2D __result)
+    {
+        if (__instance is not ChallengeFruitKnifeRestSiteOption) return true;
+        __result = PreloadManager.Cache.GetTexture2D(ChallengeFruitKnifeRestSiteOption.CookIconPath);
+        return false;
+    }
+}
 
 // Iron Wave's native setter rejects upgrades above its normal maximum of one.
 // The squad has to raise that maximum both in combat and while old upgraded

@@ -3,7 +3,7 @@
   "name": "挑战点系统",
   "author": "Codex",
   "description": "挑战点兑换四级分队与小商品；通用和角色点数合并消费。无需 BaseLib。",
-  "version": "v0.2.2",
+  "version": "v0.2.3",
   "min_game_version": "0.107.1",
   "has_pck": false,
   "has_dll": true,

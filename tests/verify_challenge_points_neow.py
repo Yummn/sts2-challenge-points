@@ -30,7 +30,9 @@ assert "await GiveRelic" not in room_hook
 assert "await GivePotion" not in room_hook
 assert "return Task.CompletedTask;" in room_hook
 rewards = CONTRACT.split("internal async Task GrantStartupRewardsAfterFadeIn", 1)[1].split("public override bool TryModifyRewards", 1)[0]
-assert "if (StartupRewardsGranted || _grantingStartupRewards) return;" in rewards
+assert "if (_grantingStartupRewards) return;" in rewards
+assert "if (StartupRewardsGranted)" in rewards
+assert "await EnsureFruitKnifeForExistingRun()" in rewards
 assert rewards.index("StartupRewardsGranted = true;") < rewards.index("await GiveRelic")
 assert "finally { _grantingStartupRewards = false; }" in rewards
 require("ChallengeStartupRewardsFadePatch", "post fade-in reward hook")

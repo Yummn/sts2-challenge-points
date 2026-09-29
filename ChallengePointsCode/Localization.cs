@@ -67,6 +67,30 @@ internal static class ChallengeLocalization
                     ["CHALLENGE_MEAT_CLEAVER.title"] = "Meat Cleaver",
                     ["CHALLENGE_MEAT_CLEAVER.description"] = "Deal {Damage:diff()} damage. Gain {Block:diff()} Block."
                 });
+            manager.GetTable("relics").MergeWith(chinese
+                ? new Dictionary<string, string>
+                {
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.title"] = "水果刀",
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.description"] = "在休息处可以选择削去 1 张牌，并获得 6 点最大生命。",
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.flavor"] = "小小一刀，剔除累赘。"
+                }
+                : new Dictionary<string, string>
+                {
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.title"] = "Fruit Knife",
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.description"] = "At a Rest Site, you may remove 1 card and gain 6 Max HP.",
+                    ["CHALLENGE_FRUIT_KNIFE_RELIC.flavor"] = "A little cut removes a burden."
+                });
+            manager.GetTable("rest_site_ui").MergeWith(chinese
+                ? new Dictionary<string, string>
+                {
+                    ["OPTION_CHALLENGE_FRUIT_KNIFE.name"] = "削牌",
+                    ["OPTION_CHALLENGE_FRUIT_KNIFE.description"] = "删除 1 张牌，获得 6 点最大生命。"
+                }
+                : new Dictionary<string, string>
+                {
+                    ["OPTION_CHALLENGE_FRUIT_KNIFE.name"] = "Carve",
+                    ["OPTION_CHALLENGE_FRUIT_KNIFE.description"] = "Remove 1 card. Gain 6 Max HP."
+                });
             manager.GetTable("powers").MergeWith(chinese
                 ? new Dictionary<string, string>
                 {

@@ -102,9 +102,9 @@
     "id": "G-12",
     "role": "common",
     "name": "敌人强化类词条",
-    "description": "每名敌人出现时，获得当前层数 × 3 层金属化；新召唤的敌人也按出现当时层数结算一次。",
+    "description": "每名敌人登场时获得每级3层金属化（1/2/3级分别为3/6/9层）；新召唤的敌人也会获得。",
     "cpPerRank": 3,
-    "maxRank": 1,
+    "maxRank": 3,
     "selectable": true
   },
   {

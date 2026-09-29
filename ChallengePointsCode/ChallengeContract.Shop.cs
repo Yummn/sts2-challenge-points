@@ -61,8 +61,8 @@ public sealed partial class ChallengeContract
         }
         if (SquadRank("SQ-07") > 0 && FindCard("铁斩波") is { } ironWave)
         {
-            foreach (CardModel old in player.Deck.Cards.Where(c => c.Id.Entry.Contains("STRIKE", StringComparison.OrdinalIgnoreCase)
-                || SquadRank("SQ-07") >= 2 && c.Id.Entry.Contains("DEFEND", StringComparison.OrdinalIgnoreCase)).ToArray())
+            foreach (CardModel old in player.Deck.Cards.Where(c =>
+                c.Id.Entry.Contains("STRIKE", StringComparison.OrdinalIgnoreCase)).ToArray())
             {
                 int index = player.Deck.Cards.ToList().IndexOf(old);
                 bool upgraded = old.IsUpgraded;
@@ -72,8 +72,10 @@ public sealed partial class ChallengeContract
                 if (upgraded) Upgrade(replacement);
                 player.Deck.AddInternal(replacement, index);
             }
+            if (SquadRank("SQ-07") >= 2)
+                foreach (CardModel card in player.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().ToArray())
+                    Upgrade(card);
         }
-        if (SquadRank("SQ-07") >= 3) AddCard("切肉刀");
 
         void AddCard(string name, bool upgraded = false)
         {
