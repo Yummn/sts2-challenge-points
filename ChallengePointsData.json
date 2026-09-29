@@ -236,8 +236,8 @@
   {
     "id": "IC-02",
     "role": "ironclad",
-    "name": "奇数回合开始时 -1 力量",
-    "description": "奇数回合开始时 -1 力量",
+    "name": "奇数回合开始时，若力量至少为 1，失去 1 点力量",
+    "description": "奇数回合开始时，若力量至少为 1，失去 1 点力量",
     "cpPerRank": 8,
     "maxRank": 1,
     "selectable": true
@@ -272,8 +272,8 @@
   {
     "id": "IC-06",
     "role": "ironclad",
-    "name": "偶数回合开始时 -1 力量",
-    "description": "偶数回合开始时 -1 力量",
+    "name": "偶数回合开始时，若力量至少为 1，失去 1 点力量",
+    "description": "偶数回合开始时，若力量至少为 1，失去 1 点力量",
     "cpPerRank": 7,
     "maxRank": 1,
     "selectable": true
@@ -585,3 +585,4 @@
     "selectable": true
   }
 ]
+

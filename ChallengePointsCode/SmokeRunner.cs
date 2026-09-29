@@ -142,6 +142,11 @@ internal sealed partial class SmokeRunner : Node
                 !ironPlayer.Deck.Cards.Any(c => c is ChallengeMeatCleaver) ||
                 ironPlayer.Deck.Cards.Any(c => c.Id.Entry.Contains("STRIKE_IRONCLAD") || c.Id.Entry.Contains("DEFEND_IRONCLAD")))
                 throw new InvalidOperationException("SQ-07 starter replacement/custom card failed");
+            shopIron.MerchantCardPurchases = 3;
+            ChallengeContract restoredShop = (ChallengeContract)ModifierModel.FromSerializable(shopIron.ToSerializable());
+            if (restoredShop.ShopSchemaVersion != 1 || restoredShop.SquadRank("SQ-07") != 3 ||
+                restoredShop.MerchantCardPurchases != 3)
+                throw new InvalidOperationException("shop contract save round trip failed");
             var shopSoul = (ChallengeContract)canonical.ToMutable();
             shopSoul.ShopSchemaVersion = 1;
             shopSoul.CharacterRole = "necrobinder";
