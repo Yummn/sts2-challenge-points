@@ -10,6 +10,11 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Unlocks;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.DevConsole;
+using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.ValueProps;
 using System.Reflection;
 
 namespace ChallengePoints;
@@ -147,6 +152,24 @@ internal sealed partial class SmokeRunner : Node
             if (restoredShop.ShopSchemaVersion != 1 || restoredShop.SquadRank("SQ-07") != 3 ||
                 restoredShop.MerchantCardPurchases != 3)
                 throw new InvalidOperationException("shop contract save round trip failed");
+            var unlimited = (ChallengeContract)canonical.ToMutable();
+            unlimited.ShopSchemaVersion = 1;
+            unlimited.CharacterRole = "ironclad";
+            unlimited.ContractData = "{\"shop:ironclad:squad:SQ-07\":4,\"shop:ironclad:item:IT-08\":1}";
+            var unlimitedPlayer = Player.CreateForNewRun<Ironclad>(UnlockState.all, 5uL);
+            var unlimitedRun = RunState.CreateForTest(new[] { unlimitedPlayer }, modifiers: new ModifierModel[] { unlimited });
+            unlimited.OnRunCreated(unlimitedRun);
+            var wave = unlimitedPlayer.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().First();
+            if (wave.CurrentUpgradeLevel != 1 || wave.MaxUpgradeLevel != int.MaxValue)
+                throw new InvalidOperationException("SQ-07/IT-08 upgrade synergy did not initialize");
+            var defeated = new Creature(ModelDb.Monster<SpinyToad>().ToMutable(), CombatSide.Enemy, null);
+            await unlimited.AfterDeath(new ThrowingPlayerChoiceContext(), defeated, false, 0);
+            await unlimited.AfterDeath(new ThrowingPlayerChoiceContext(), defeated, false, 0);
+            if (wave.CurrentUpgradeLevel != 3)
+                throw new InvalidOperationException($"SQ-07 kill upgrades expected 3, got {wave.CurrentUpgradeLevel}");
+            CardModel reloadedWave = CardModel.FromSerializable(wave.ToSerializable());
+            if (reloadedWave.CurrentUpgradeLevel != 3)
+                throw new InvalidOperationException("SQ-07 upgraded Iron Wave could not round-trip through card save");
             var shopSoul = (ChallengeContract)canonical.ToMutable();
             shopSoul.ShopSchemaVersion = 1;
             shopSoul.CharacterRole = "necrobinder";
@@ -178,16 +201,36 @@ internal sealed partial class SmokeRunner : Node
 
     private async Task RunIntegration()
     {
+        string mode = System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION") ?? "";
         var contract = (ChallengeContract)ModelDb.Modifier<ChallengeContract>().ToMutable();
-        contract.CharacterRole = "ironclad";
+        contract.CharacterRole = mode switch
+        {
+            "soul" or "spirit" => "necrobinder",
+            "status" => "defect",
+            _ => "ironclad"
+        };
         contract.ShopSchemaVersion = 1;
-        bool choiceTest = System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION") == "choice";
-        contract.ContractData = choiceTest
-            ? "{\"shop:ironclad:item:IT-03\":1}"
-            : "{\"shop:ironclad:squad:SQ-07\":3}";
+        bool choiceTest = mode == "choice";
+        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status";
+        contract.ContractData = mode switch
+        {
+            "choice" => "{\"shop:ironclad:item:IT-03\":1}",
+            "battle" => "{\"shop:ironclad:squad:SQ-07\":4,\"shop:ironclad:item:IT-08\":1}",
+            "light" => "{\"shop:ironclad:squad:SQ-02\":2}",
+            "soul" => "{\"shop:necrobinder:squad:SQ-03\":4}",
+            "spirit" => "{\"shop:necrobinder:squad:SQ-09\":1}",
+            "status" => "{\"shop:defect:squad:SQ-05\":3}",
+            _ => "{\"shop:ironclad:squad:SQ-07\":3}"
+        };
         NGame game = NGame.Instance ?? throw new InvalidOperationException("NGame not ready for PC integration");
+        CharacterModel character = mode switch
+        {
+            "soul" or "spirit" => ModelDb.Character<MegaCrit.Sts2.Core.Models.Characters.Necrobinder>(),
+            "status" => ModelDb.Character<MegaCrit.Sts2.Core.Models.Characters.Defect>(),
+            _ => ModelDb.Character<Ironclad>()
+        };
         Task<RunState> start = game.StartNewSingleplayerRun(
-            ModelDb.Character<Ironclad>(), false, ActModel.GetDefaultList(),
+            character, false, ActModel.GetDefaultList(),
             new ModifierModel[] { contract }, "CHALLENGEPOINTSINTEGRATION", GameMode.Standard);
         if (choiceTest)
         {
@@ -210,6 +253,81 @@ internal sealed partial class SmokeRunner : Node
             throw new InvalidOperationException($"new-run UI/Neow not ready: room={run.CurrentRoom?.GetType().Name}");
         if (scene.GetNodeOrNull<ChallengeContractHud>("ChallengeContractHud") is null)
             throw new InvalidOperationException("contract HUD missing from PC run");
+        if (battleTest)
+        {
+            var console = new DevConsole(shouldAllowDebugCommands: true);
+            var fight = console.ProcessCommand("fight SPINY_TOAD_NORMAL");
+            if (!fight.success) throw new InvalidOperationException($"PC fight command failed: {fight.msg}");
+            for (int i = 0; i < 200 && !CombatManager.Instance.IsInProgress; i++)
+                await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
+            if (!CombatManager.Instance.IsInProgress) throw new TimeoutException("PC combat did not start");
+            Player player = run.Players.Single();
+            ICombatState combat = player.Creature.CombatState ?? throw new InvalidOperationException("player combat state missing");
+            if (mode == "light")
+            {
+                for (int i = 0; i < 100 && !PileType.Hand.GetPile(player).Cards.Any(c => c is ChallengeLightVoucher); i++)
+                    await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
+                CardModel voucher = PileType.Hand.GetPile(player).Cards.First(c => c is ChallengeLightVoucher);
+                if (!ReferenceEquals(voucher.Owner, player)) throw new InvalidOperationException("SQ-02 voucher has no owner");
+                await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), voucher, null).WaitAsync(TimeSpan.FromSeconds(20));
+                if (voucher.Pile?.Type == PileType.Hand) throw new InvalidOperationException("SQ-02 voucher did not play");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-02 generated voucher played in PC combat.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "soul")
+            {
+                await contract.BeforeHandDraw(player, new ThrowingPlayerChoiceContext(), combat).WaitAsync(TimeSpan.FromSeconds(20));
+                CardModel[] soulCards = new[] { PileType.Draw, PileType.Hand, PileType.Discard }
+                    .SelectMany(p => p.GetPile(player).Cards).Where(c => c is MegaCrit.Sts2.Core.Models.Cards.Soul
+                        || c.Id.Entry.Contains("WISP", StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (soulCards.Length < 2 || soulCards.Any(c => !ReferenceEquals(c.Owner, player)))
+                    throw new InvalidOperationException("SQ-03 soul/wisp generation or owner binding failed");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-03 generated soul/wisp in PC combat.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "status")
+            {
+                CardModel wound = combat.CreateCard(ModelDb.Card<MegaCrit.Sts2.Core.Models.Cards.Wound>(), player);
+                await CardPileCmd.AddGeneratedCardToCombat(wound, PileType.Hand, player).WaitAsync(TimeSpan.FromSeconds(20));
+                if (contract.ShopStatusesThisTurn < 1 || !PileType.Hand.GetPile(player).Cards.Any(c => c.Id.Entry == "FUEL"))
+                    throw new InvalidOperationException("SQ-05 status-generated fuel did not appear");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-05 generated fuel after status in PC combat.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "spirit")
+            {
+                CardModel spiritMaker = combat.CreateCard(ModelDb.Card<ChallengeSpiritMaker>(), player);
+                await CardPileCmd.AddGeneratedCardToCombat(spiritMaker, PileType.Hand, player);
+                await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), spiritMaker, null).WaitAsync(TimeSpan.FromSeconds(20));
+                CardModel? spirit = PileType.Draw.GetPile(player).Cards.FirstOrDefault(c => c is MegaCrit.Sts2.Core.Models.Cards.Apparition);
+                if (spirit is null || !ReferenceEquals(spirit.Owner, player))
+                    throw new InvalidOperationException("SQ-09 Apparition did not generate with an owner");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-09 Spirit Maker played and generated Apparition.");
+                GetTree().Quit(0);
+                return;
+            }
+            CardModel wave = player.Deck.Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.IronWave>().First();
+            if (wave.CurrentUpgradeLevel != 1) throw new InvalidOperationException("IT-08 starter upgrade missing in live run");
+            CardModel generated = combat.CreateCard(ModelDb.Card<ChallengeMeatCleaver>(), player);
+            await CardPileCmd.AddGeneratedCardToCombat(generated, PileType.Hand, player);
+            await ToSignal(GetTree().CreateTimer(0.5), SceneTreeTimer.SignalName.Timeout);
+            CardModel cleaver = PileType.Hand.GetPile(player).Cards.Last(c => c is ChallengeMeatCleaver);
+            Creature target = combat.HittableEnemies.First(c => c.IsAlive && c.IsHittable);
+            int hp = target.CurrentHp;
+            int block = player.Creature.Block;
+            await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), cleaver, target).WaitAsync(TimeSpan.FromSeconds(20));
+            if (target.CurrentHp >= hp || player.Creature.Block <= block || cleaver.Pile?.Type == PileType.Hand)
+                throw new InvalidOperationException("SQ-07 Meat Cleaver failed to play damage/block in PC combat");
+            await CreatureCmd.Damage(new BlockingPlayerChoiceContext(), target, 999, ValueProp.Unpowered, player.Creature);
+            if (wave.CurrentUpgradeLevel != 2 || CardModel.FromSerializable(wave.ToSerializable()).CurrentUpgradeLevel != 2)
+                throw new InvalidOperationException("SQ-07 enemy kill did not persist unlimited Iron Wave upgrade");
+            MainFile.Logger.Info("[ChallengePointsIntegration] PASS: PC combat Meat Cleaver damage/block and SQ-07 kill upgrade/save.");
+            GetTree().Quit(0);
+            return;
+        }
         string capture = Path.Combine(Path.GetDirectoryName(typeof(MainFile).Assembly.Location)!, "integration-neow.png");
         GetViewport().GetTexture().GetImage().SavePng(capture);
         MainFile.Logger.Info($"[ChallengePointsIntegration] PASS: PC new-run and Neow loaded; capture={capture}");

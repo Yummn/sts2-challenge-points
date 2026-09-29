@@ -13,8 +13,49 @@ using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Saves.Runs;
 
 namespace ChallengePoints;
+
+// Iron Wave's native setter rejects upgrades above its normal maximum of one.
+// The squad has to raise that maximum both in combat and while old upgraded
+// cards are reconstructed from a save (before they have an Owner).
+[HarmonyPatch(typeof(CardModel), "get_MaxUpgradeLevel")]
+internal static class ChallengeIronWaveUpgradeLimitPatch
+{
+    [ThreadStatic] internal static bool LoadingUnlimitedIronWave;
+
+    private static bool Prefix(CardModel __instance, ref int __result)
+    {
+        if (__instance is not IronWave) return true;
+        if (LoadingUnlimitedIronWave || __instance.IsMutable &&
+            __instance.Owner?.RunState?.Modifiers.OfType<ChallengeContract>().Any(c =>
+                c.ShopSchemaVersion > 0 && c.SquadRank("SQ-07") >= 4) == true)
+        {
+            __result = int.MaxValue;
+            return false;
+        }
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(CardModel), nameof(CardModel.FromSerializable))]
+internal static class ChallengeIronWaveLoadPatch
+{
+    private static void Prefix(SerializableCard save, out bool __state)
+    {
+        __state = ChallengeIronWaveUpgradeLimitPatch.LoadingUnlimitedIronWave;
+        if (save.Id?.Entry == "IRON_WAVE" && save.CurrentUpgradeLevel > 1)
+            ChallengeIronWaveUpgradeLimitPatch.LoadingUnlimitedIronWave = true;
+    }
+
+    private static Exception? Finalizer(Exception? __exception, bool __state)
+    {
+        ChallengeIronWaveUpgradeLimitPatch.LoadingUnlimitedIronWave = __state;
+        return __exception;
+    }
+}
 
 [HarmonyPatch(typeof(PowerCmd), nameof(PowerCmd.Decrement))]
 internal static class ChallengePoisonDoesNotDecayPatch

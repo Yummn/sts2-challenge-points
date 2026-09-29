@@ -302,6 +302,10 @@ public sealed partial class ChallengeContract : ModifierModel
         return adjusted;
     }
 
+    private static CardModel GenerateForCombat(CardModel canonical, Player owner) =>
+        (owner.Creature.CombatState ?? throw new InvalidOperationException("No combat state for generated card"))
+        .CreateCard(canonical, owner);
+
     public override Task AfterItemPurchased(Player player, MerchantEntry itemPurchased, int goldSpent)
     {
         if (ShopSchemaVersion > 0 && HasShopItem("IT-09") && MerchantCardPurchases < 10 &&
@@ -462,7 +466,7 @@ public sealed partial class ChallengeContract : ModifierModel
                 try
                 {
                     if (base.RunState.Rng.Niche.NextItem(statuses) is { } status)
-                        await CardPileCmd.AddGeneratedCardToCombat(status.ToMutable(), PileType.Hand, creator);
+                        await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(status, creator), PileType.Hand, creator);
                 }
                 finally { _addingStatus = false; }
             }
@@ -471,7 +475,7 @@ public sealed partial class ChallengeContract : ModifierModel
             && ++SoulGeneratedThisTurn == 1)
         {
             _addingStatus = true;
-            try { await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Dazed>().ToMutable(), PileType.Draw, creator, CardPilePosition.Top); }
+            try { await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(ModelDb.Card<Dazed>(), creator), PileType.Draw, creator, CardPilePosition.Top); }
             finally { _addingStatus = false; }
         }
     }
@@ -483,7 +487,7 @@ public sealed partial class ChallengeContract : ModifierModel
         if (CharacterRole == "ironclad")
         {
             if (Rank("IC-03") > 0 && ++ExhaustedThisTurn % 2 == 0)
-                await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Wound>().ToMutable(), PileType.Hand, card.Owner);
+                await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(ModelDb.Card<Wound>(), card.Owner), PileType.Hand, card.Owner);
             if (Rank("IC-07") > 0 && card is AscendersBane)
                 card.Owner.Creature.LoseHpInternal(1, ValueProp.Unblockable | ValueProp.Unpowered);
         }
@@ -496,7 +500,7 @@ public sealed partial class ChallengeContract : ModifierModel
         if (_shopWatchingSoulDraw && _shopSoulDrawnCard is null && card.Owner == base.RunState.Players.FirstOrDefault())
             _shopSoulDrawnCard = card;
         if (CharacterRole == "silent" && Rank("SL-02") > 0 && !fromHandDraw && ++NonHandDrawsThisTurn == 1)
-            await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Dazed>().ToMutable(), PileType.Draw, card.Owner, CardPilePosition.Top);
+            await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(ModelDb.Card<Dazed>(), card.Owner), PileType.Draw, card.Owner, CardPilePosition.Top);
     }
 
     public override async Task AfterCardChangedPiles(CardModel card, PileType oldPileType, AbstractModel? clonedBy)
@@ -954,9 +958,8 @@ public sealed partial class ChallengeContract : ModifierModel
         foreach (CardModel card in player.Deck.Cards.Concat(player.PlayerCombatState?.AllCards ?? Enumerable.Empty<CardModel>()))
         {
             if (!seen.Add(card) || card is not IronWave) continue;
-            // Iron Wave's UpgradeInternal does not enforce MaxUpgradeLevel.
-            // Deliberately bypass IsUpgradable to support the purchased
-            // unlimited-upgrade effect, including saved levels above one.
+            // SQ-07 raises Iron Wave's MaxUpgradeLevel through Harmony so the
+            // native setter and save reconstruction accept every new level.
             card.UpgradeInternal();
             card.FinalizeUpgradeInternal();
         }

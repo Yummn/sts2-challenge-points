@@ -104,14 +104,14 @@ public sealed partial class ChallengeContract
             foreach (string name in choices)
                 if (FindCard(name) is { } canonical)
                 {
-                    CardModel card = canonical.ToMutable();
+                    CardModel card = GenerateForCombat(canonical, player);
                     if (name == "灵魂" && SquadRank("SQ-03") >= 2) Upgrade(card);
                     await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Draw, player, CardPilePosition.Bottom);
                 }
         }
 
         if (SquadRank("SQ-02") >= 2)
-            await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<ChallengeLightVoucher>().ToMutable(), PileType.Hand, player);
+            await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(ModelDb.Card<ChallengeLightVoucher>(), player), PileType.Hand, player);
 
         if (SquadRank("SQ-06") > 0)
         {
@@ -119,7 +119,7 @@ public sealed partial class ChallengeContract
                 c.Rarity is CardRarity.Common or CardRarity.Uncommon or CardRarity.Rare).ToArray();
             if (base.RunState.Rng.Niche.NextItem(pool) is { } canonical)
             {
-                CardModel card = canonical.ToMutable();
+                CardModel card = GenerateForCombat(canonical, player);
                 if (SquadRank("SQ-06") >= 4) Upgrade(card);
                 await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, player);
             }
@@ -140,7 +140,7 @@ public sealed partial class ChallengeContract
             else await OrbCmd.Channel<DarkOrb>(context, creator);
         }
         if (nth == 1 && rank >= 3 && FindCard("燃料") is { } fuel)
-            await CardPileCmd.AddGeneratedCardToCombat(fuel.ToMutable(), PileType.Hand, creator);
+            await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(fuel, creator), PileType.Hand, creator);
         if (rank >= 4)
             await PowerCmd.Apply<TemporaryFocusPower>(context, creator.Creature, 1, null, null);
     }

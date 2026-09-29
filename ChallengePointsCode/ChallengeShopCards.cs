@@ -61,7 +61,9 @@ public sealed class ChallengeSpiritMaker : CardModel
     {
         await CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay);
         await PowerCmd.Apply<VulnerablePower>(choiceContext, Owner.Creature, 2, Owner.Creature, this);
-        await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Apparition>().ToMutable(), PileType.Draw, Owner, CardPilePosition.Bottom);
+        CardModel spirit = (Owner.Creature.CombatState ?? throw new InvalidOperationException("No combat for generated Apparition"))
+            .CreateCard(ModelDb.Card<Apparition>(), Owner);
+        await CardPileCmd.AddGeneratedCardToCombat(spirit, PileType.Draw, Owner, CardPilePosition.Bottom);
     }
     protected override void OnUpgrade()
     {
@@ -80,7 +82,9 @@ public sealed class ChallengeSpiritPrinter : CardModel
     {
         await PowerCmd.Apply<IntangiblePower>(choiceContext, Owner.Creature, 1, Owner.Creature, this);
         await PowerCmd.Apply<VulnerablePower>(choiceContext, Owner.Creature, 2, Owner.Creature, this);
-        await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Apparition>().ToMutable(), PileType.Draw, Owner, CardPilePosition.Bottom);
+        CardModel spirit = (Owner.Creature.CombatState ?? throw new InvalidOperationException("No combat for generated Apparition"))
+            .CreateCard(ModelDb.Card<Apparition>(), Owner);
+        await CardPileCmd.AddGeneratedCardToCombat(spirit, PileType.Draw, Owner, CardPilePosition.Bottom);
     }
     protected override void OnUpgrade() => RemoveKeyword(CardKeyword.Exhaust);
 }
