@@ -18,16 +18,55 @@ internal static class ChallengeLocalization
                 ? new Dictionary<string, string>
                 {
                     ["CHALLENGE_CONTRACT.title"] = "挑战点契约",
-                    ["CHALLENGE_CONTRACT.description"] = "通用与角色挑战点分别计算，并在达到各自阈值时给予奖励。"
+                    ["CHALLENGE_CONTRACT.description"] = "选择挑战词条赚取挑战点，购买分队和小商品；已选规则随本局保存。"
                 }
                 : new Dictionary<string, string>
                 {
                     ["CHALLENGE_CONTRACT.title"] = "Challenge Contract",
-                    ["CHALLENGE_CONTRACT.description"] = "Common and character challenge points unlock separate rewards."
+                    ["CHALLENGE_CONTRACT.description"] = "Earn challenge points from contracts, then buy squads and supplies for this run."
                 });
             manager.GetTable("card_selection").MergeWith(chinese
-                ? new Dictionary<string, string> { ["CHALLENGE_SELECT"] = "选择一张挑战奖励牌" }
-                : new Dictionary<string, string> { ["CHALLENGE_SELECT"] = "Choose a challenge reward card" });
+                ? new Dictionary<string, string>
+                {
+                    ["CHALLENGE_SELECT"] = "选择一张挑战奖励牌",
+                    ["CHALLENGE_SHOP_POWER"] = "选择一张能力牌",
+                    ["CHALLENGE_SHOP_START"] = "选择分队起始牌",
+                    ["CHALLENGE_SHOP_ACT"] = "选择跨幕奖励牌",
+                    ["CHALLENGE_SHOP_REMOVE"] = "选择要删除的牌",
+                    ["CHALLENGE_SHOP_UPGRADE"] = "选择要升级的牌"
+                }
+                : new Dictionary<string, string>
+                {
+                    ["CHALLENGE_SELECT"] = "Choose a challenge reward card",
+                    ["CHALLENGE_SHOP_POWER"] = "Choose a Power",
+                    ["CHALLENGE_SHOP_START"] = "Choose a squad starter",
+                    ["CHALLENGE_SHOP_ACT"] = "Choose an act reward",
+                    ["CHALLENGE_SHOP_REMOVE"] = "Choose cards to remove",
+                    ["CHALLENGE_SHOP_UPGRADE"] = "Choose a card to upgrade"
+                });
+            manager.GetTable("cards").MergeWith(chinese
+                ? new Dictionary<string, string>
+                {
+                    ["CHALLENGE_LIGHT_VOUCHER.title"] = "光明券",
+                    ["CHALLENGE_LIGHT_VOUCHER.description"] = "获得 1 点[gold]能量[/gold]。",
+                    ["CHALLENGE_SPIRIT_MAKER.title"] = "生成灵体",
+                    ["CHALLENGE_SPIRIT_MAKER.description"] = "获得 {Block:diff()} 点[gold]格挡[/gold]。获得 2 层[gold]易伤[/gold]。将 1 张[gold]灵体[/gold]加入抽牌堆。",
+                    ["CHALLENGE_SPIRIT_PRINTER.title"] = "灵体印刷机",
+                    ["CHALLENGE_SPIRIT_PRINTER.description"] = "获得 1 层[gold]无实体[/gold]和 2 层[gold]易伤[/gold]。将 1 张[gold]灵体[/gold]加入抽牌堆。",
+                    ["CHALLENGE_MEAT_CLEAVER.title"] = "切肉刀",
+                    ["CHALLENGE_MEAT_CLEAVER.description"] = "造成 {Damage:diff()} 点伤害。获得 {Block:diff()} 点[gold]格挡[/gold]。"
+                }
+                : new Dictionary<string, string>
+                {
+                    ["CHALLENGE_LIGHT_VOUCHER.title"] = "Light Voucher",
+                    ["CHALLENGE_LIGHT_VOUCHER.description"] = "Gain 1 Energy.",
+                    ["CHALLENGE_SPIRIT_MAKER.title"] = "Create Apparition",
+                    ["CHALLENGE_SPIRIT_MAKER.description"] = "Gain {Block:diff()} Block. Gain 2 Vulnerable. Add an Apparition to your draw pile.",
+                    ["CHALLENGE_SPIRIT_PRINTER.title"] = "Apparition Printer",
+                    ["CHALLENGE_SPIRIT_PRINTER.description"] = "Gain 1 Intangible and 2 Vulnerable. Add an Apparition to your draw pile.",
+                    ["CHALLENGE_MEAT_CLEAVER.title"] = "Meat Cleaver",
+                    ["CHALLENGE_MEAT_CLEAVER.description"] = "Deal {Damage:diff()} damage. Gain {Block:diff()} Block."
+                });
             manager.GetTable("powers").MergeWith(chinese
                 ? new Dictionary<string, string>
                 {

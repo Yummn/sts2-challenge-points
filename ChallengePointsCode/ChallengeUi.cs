@@ -9,10 +9,13 @@ internal sealed partial class ChallengeUi : CanvasLayer
     private Control _shade = null!;
     private VBoxContainer _commonList = null!;
     private VBoxContainer _roleList = null!;
+    private Label _commonHeading = null!;
+    private Label _roleHeading = null!;
     private Label _summary = null!;
     private Label _commonRewards = null!;
     private Label _roleRewards = null!;
     private Control _frame = null!;
+    private bool _showShop;
 
     internal ChallengeUi(NCharacterSelectScreen screen)
     {
@@ -83,6 +86,14 @@ internal sealed partial class ChallengeUi : CanvasLayer
         var title = MakeLabel("挑战点契约", 42, new Color("38232b"));
         title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         header.AddChild(title);
+        var challengesTab = MakeButton("挑战词条", new Color("6a8292"), 22);
+        challengesTab.CustomMinimumSize = new Vector2(170, 62);
+        challengesTab.Pressed += () => { _showShop = false; Refresh(); };
+        header.AddChild(challengesTab);
+        var shopTab = MakeButton("分队商店", new Color("9b7150"), 22);
+        shopTab.CustomMinimumSize = new Vector2(170, 62);
+        shopTab.Pressed += () => { _showShop = true; Refresh(); };
+        header.AddChild(shopTab);
         var close = MakeButton("返回", new Color("bd6555"), 24);
         close.CustomMinimumSize = new Vector2(150, 62);
         close.Pressed += () => _shade.Visible = false;
@@ -94,8 +105,8 @@ internal sealed partial class ChallengeUi : CanvasLayer
         columns.AddThemeConstantOverride("separation", 20);
         columns.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         root.AddChild(columns);
-        _commonList = MakeColumn(columns, "通用挑战", new Color("52788d"));
-        _roleList = MakeColumn(columns, "角色挑战", new Color("9b5a56"));
+        _commonList = MakeColumn(columns, "通用挑战", new Color("52788d"), out _commonHeading);
+        _roleList = MakeColumn(columns, "角色挑战", new Color("9b5a56"), out _roleHeading);
 
         _commonRewards = MakeLabel("", 19, new Color("334d5c"));
         _commonRewards.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -103,7 +114,7 @@ internal sealed partial class ChallengeUi : CanvasLayer
         _roleRewards = MakeLabel("", 19, new Color("7e383e"));
         _roleRewards.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         root.AddChild(_roleRewards);
-        root.AddChild(MakeLabel("触控 ＋ / － 选择等级；达到阈值后奖励自动生效。本局开始后锁定。", 18, new Color("6e6257")));
+        root.AddChild(MakeLabel("先选挑战赚点，再到分队商店购买。开局后配置锁定；旧阈值不再自动发奖。", 18, new Color("6e6257")));
         GetViewport().SizeChanged += UpdateFrameScale;
         UpdateFrameScale();
     }
@@ -121,7 +132,7 @@ internal sealed partial class ChallengeUi : CanvasLayer
         GetViewport().SizeChanged -= UpdateFrameScale;
     }
 
-    private static VBoxContainer MakeColumn(HBoxContainer host, string title, Color color)
+    private static VBoxContainer MakeColumn(HBoxContainer host, string title, Color color, out Label heading)
     {
         var panel = new PanelContainer();
         panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -131,7 +142,7 @@ internal sealed partial class ChallengeUi : CanvasLayer
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 10);
         panel.AddChild(column);
-        var heading = MakeLabel(title, 30, color);
+        heading = MakeLabel(title, 30, color);
         column.AddChild(heading);
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         scroll.CustomMinimumSize = new Vector2(0, 300);
@@ -160,29 +171,109 @@ internal sealed partial class ChallengeUi : CanvasLayer
     private void Refresh()
     {
         string role = CurrentRole();
-        BuildRows(_commonList, "common");
-        BuildRows(_roleList, role);
         int common = ChallengeSelection.Score("common");
         int character = ChallengeSelection.Score(role);
-        _summary.Text = $"通用挑战点  {common}       角色挑战点  {character}       两条轨道独立领奖";
-        _commonRewards.Text = "通用奖励  " + ThresholdText(common, ChallengeCatalog.CommonThresholds,
-            new[] { "护喉甲", "小型扭蛋", "龙涎香", "金属化5", "初始牌升级", "首商店免费" });
-        _roleRewards.Text = "角色奖励  " + ThresholdText(character, ChallengeCatalog.CharacterThresholds,
-            new[] { "开局能力", "替换打击/防御", "升级牌选1", "追加升级牌选1" });
+        int spent = ChallengeSelection.Spent(role);
+        _summary.Text = $"通用 {common} ＋ 角色 {character} － 已花 {spent} ＝ 可用 {common + character - spent} 挑战点";
+        if (_showShop)
+        {
+            _commonHeading.Text = "四级分队";
+            _roleHeading.Text = "小商品";
+            BuildSquads(_commonList, role);
+            BuildItems(_roleList, role);
+            _commonRewards.Text = "分队可同时购买；价格为当前级总价，升级仅补差价。";
+            _roleRewards.Text = "不确定分队随机跨角色，结果在开局时固定。";
+        }
+        else
+        {
+            _commonHeading.Text = "通用挑战";
+            _roleHeading.Text = "角色挑战";
+            BuildRows(_commonList, "common");
+            BuildRows(_roleList, role);
+            _commonRewards.Text = "词条仅提供购买点数；旧阈值奖励已取消。";
+            _roleRewards.Text = "减少词条等级时，不能使已购内容超出预算。";
+        }
     }
 
-    private static string ThresholdText(int score, int[] thresholds, string[] rewards) =>
-        string.Join("   ", thresholds.Select((t, i) => score >= t ? $"◆{t} {rewards[i]}" : $"◇{t} {rewards[i]}"));
-
-    private void BuildRows(VBoxContainer target, string role)
+    private static void ClearRows(VBoxContainer target)
     {
-        var scroll = target.GetParent() as ScrollContainer;
-        int previousScroll = scroll?.ScrollVertical ?? 0;
         foreach (Node child in target.GetChildren())
         {
             target.RemoveChild(child);
             child.QueueFree();
         }
+    }
+
+    private void BuildSquads(VBoxContainer target, string role)
+    {
+        var scroll = target.GetParent() as ScrollContainer;
+        int previousScroll = scroll?.ScrollVertical ?? 0;
+        ClearRows(target);
+        foreach (ChallengeSquad squad in ChallengeShopCatalog.Squads.Where(x => x.Role == "common" || x.Role == role))
+        {
+            int rank = ChallengeSelection.SquadRank(role, squad.Id);
+            var panel = new PanelContainer();
+            panel.AddThemeStyleboxOverride("panel", Style(new Color("e9d1a6"), new Color("6d4a3a"), 4, 9));
+            target.AddChild(panel);
+            var row = new HBoxContainer();
+            panel.AddChild(row);
+            var texts = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            row.AddChild(texts);
+            var heading = MakeLabel($"{squad.Name}  {rank}/4 · {squad.Price(rank)} 点", 20, new Color("443130"));
+            texts.AddChild(heading);
+            var description = MakeLabel(rank == 0
+                ? $"I 级 {squad.TotalPrices[0]} 点 · {squad.TierDescriptions[0]}"
+                : $"当前：{squad.TierDescriptions[rank - 1]}" + (rank < 4 ? $"\n下级：{squad.TierDescriptions[rank]}" : ""),
+                17, new Color("695349"));
+            description.AutowrapMode = TextServer.AutowrapMode.Arbitrary;
+            texts.AddChild(description);
+            var minus = MakeButton("－", new Color("b96f5c"), 22);
+            minus.CustomMinimumSize = new Vector2(64, 58);
+            minus.Disabled = rank == 0;
+            minus.Pressed += () => { ChallengeSelection.SetSquadRank(role, squad.Id, rank - 1); Refresh(); };
+            row.AddChild(minus);
+            var plus = MakeButton("＋", new Color("77936e"), 22);
+            plus.CustomMinimumSize = new Vector2(64, 58);
+            plus.Disabled = rank >= 4 || ChallengeSelection.Available(role) < squad.Price(rank + 1) - squad.Price(rank);
+            plus.Pressed += () => { ChallengeSelection.SetSquadRank(role, squad.Id, rank + 1); Refresh(); };
+            row.AddChild(plus);
+        }
+        scroll?.SetDeferred("scroll_vertical", previousScroll);
+    }
+
+    private void BuildItems(VBoxContainer target, string role)
+    {
+        var scroll = target.GetParent() as ScrollContainer;
+        int previousScroll = scroll?.ScrollVertical ?? 0;
+        ClearRows(target);
+        foreach (ChallengeShopItem item in ChallengeShopCatalog.Items)
+        {
+            bool owned = ChallengeSelection.HasItem(role, item.Id);
+            var panel = new PanelContainer();
+            panel.AddThemeStyleboxOverride("panel", Style(new Color("e9d1a6"), new Color("6d4a3a"), 4, 9));
+            target.AddChild(panel);
+            var row = new HBoxContainer();
+            panel.AddChild(row);
+            var texts = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            row.AddChild(texts);
+            texts.AddChild(MakeLabel($"{item.Name} · {item.Price} 点{(owned ? " · 已购" : "")}", 20, new Color("443130")));
+            var description = MakeLabel(item.Description, 17, new Color("695349"));
+            description.AutowrapMode = TextServer.AutowrapMode.Arbitrary;
+            texts.AddChild(description);
+            var button = MakeButton(owned ? "退" : "购", owned ? new Color("b96f5c") : new Color("77936e"), 22);
+            button.CustomMinimumSize = new Vector2(74, 58);
+            button.Disabled = !owned && ChallengeSelection.Available(role) < item.Price;
+            button.Pressed += () => { ChallengeSelection.SetItem(role, item.Id, !owned); Refresh(); };
+            row.AddChild(button);
+        }
+        scroll?.SetDeferred("scroll_vertical", previousScroll);
+    }
+
+    private void BuildRows(VBoxContainer target, string role)
+    {
+        var scroll = target.GetParent() as ScrollContainer;
+        int previousScroll = scroll?.ScrollVertical ?? 0;
+        ClearRows(target);
         foreach (ChallengeDefinition definition in ChallengeCatalog.All.Where(d => d.Role == role))
         {
             var panel = new PanelContainer();

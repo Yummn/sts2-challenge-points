@@ -4,7 +4,7 @@
     "role": "common",
     "name": "敌人最大生命提高",
     "description": "+10% / 级，最多 3 级",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -13,7 +13,7 @@
     "role": "common",
     "name": "自己的最大生命减少",
     "description": "-3 / 级，最多 3 级",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -22,7 +22,7 @@
     "role": "common",
     "name": "初始金币降低",
     "description": "每级使初始金币 -25，最多 3 级；不足部分按 0 处理。",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -112,7 +112,7 @@
     "role": "common",
     "name": "开局负面状态 A",
     "description": "首回合开始时获得 1 层虚弱，重复选择增加层数",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -121,7 +121,7 @@
     "role": "common",
     "name": "开局负面状态 B",
     "description": "首回和开始时获得一层脆弱，重复选择，增加层数",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -220,7 +220,7 @@
     "role": "common",
     "name": "首回合失血",
     "description": "首回合开始时自己失去生命；第一级 1 点，后续每级增加 1 点。",
-    "cpPerRank": 1,
+    "cpPerRank": 2,
     "maxRank": 3,
     "selectable": true
   },
@@ -543,7 +543,7 @@
     "id": "DF-04",
     "role": "defect",
     "name": "状态牌回流",
-    "description": "每回合每有 2 张状态牌进入弃牌堆，将第 2 张改放到抽牌堆顶部。",
+    "description": "回合开始时，将弃牌堆中最先放入的一张状态牌置于抽牌堆底部。每回合至多一次。",
     "cpPerRank": 8,
     "maxRank": 1,
     "selectable": true

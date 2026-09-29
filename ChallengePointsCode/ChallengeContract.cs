@@ -29,14 +29,30 @@ namespace ChallengePoints;
 
 // A real run modifier, rather than a sidecar save, so the selected contract and
 // its counters are serialized by the game's own run-save pipeline.
-public sealed class ChallengeContract : ModifierModel
+public sealed partial class ChallengeContract : ModifierModel
 {
     private Dictionary<string, int>? _ranks;
 
     [SavedProperty] public string ContractData { get; set; } = "{}";
     [SavedProperty] public string CharacterRole { get; set; } = "ironclad";
+    // Zero is an existing v0.1.x run. Those saves keep their original reward
+    // contract; only newly created runs use the shop economy.
+    [SavedProperty] public int ShopSchemaVersion { get; set; }
+    [SavedProperty] public string RandomSquadId { get; set; } = "";
     [SavedProperty] public bool StartupRewardsGranted { get; set; }
     [SavedProperty] public bool FirstShopSeen { get; set; }
+    [SavedProperty] public int MerchantCardPurchases { get; set; }
+    [SavedProperty] public bool ShopTotemSpent { get; set; }
+    [SavedProperty] public int ShopEnergySpent { get; set; }
+    [SavedProperty] public int ShopExhausted { get; set; }
+    [SavedProperty] public int ShopStatusesThisTurn { get; set; }
+    [SavedProperty] public int ShopCombatStartHp { get; set; }
+    [SavedProperty] public int ShopPowersPlayedThisTurn { get; set; }
+    [SavedProperty] public int ShopCardsAcquired { get; set; }
+    [SavedProperty] public int ShopStartupChoiceStage { get; set; }
+    [SavedProperty] public int ShopActChoiceAct { get; set; } = -1;
+    [SavedProperty] public int ShopActChoiceStage { get; set; }
+    [SavedProperty] public bool ShopSoulAutoplayUsedThisTurn { get; set; }
     [SavedProperty] public int ColorlessPlayedThisTurn { get; set; }
     [SavedProperty] public int ZeroCostPlayedThisTurn { get; set; }
     [SavedProperty] public int PowerPlayedThisTurn { get; set; }
@@ -62,6 +78,7 @@ public sealed class ChallengeContract : ModifierModel
     private bool _copyingCurse;
     private bool _grantingStartupPotion;
     private bool _addingStatus;
+    private Player? _shopTotemPendingPlayer;
 
     public override LocString Title => new("modifiers", "CHALLENGE_CONTRACT.title");
     public override LocString Description => new("modifiers", "CHALLENGE_CONTRACT.description");
@@ -70,28 +87,49 @@ public sealed class ChallengeContract : ModifierModel
         ?? new Dictionary<string, int>();
 
     internal int Rank(string id) => Ranks.TryGetValue(id, out int rank) ? rank : 0;
-    internal int CommonCp => ChallengeCatalog.All.Where(x => x.Role == "common").Sum(x => Rank(x.Id) * x.CpPerRank);
+    internal int SquadRank(string id)
+    {
+        int direct = Rank($"shop:{CharacterRole}:squad:{id}");
+        return id == RandomSquadId ? Math.Max(direct, Rank($"shop:{CharacterRole}:squad:SQ-08")) : direct;
+    }
+    internal bool HasShopItem(string id) => Rank($"shop:{CharacterRole}:item:{id}") > 0;
+    internal int CommonCp => ChallengeCatalog.All.Where(x => x.Role == "common").Sum(x => Rank(x.Id) *
+        (ShopSchemaVersion == 0 && x.Id is "G-01" or "G-02" or "G-03" or "G-13" or "G-14" or "G-25"
+            ? 1 : x.CpPerRank));
     internal int RoleCp => ChallengeCatalog.All.Where(x => x.Role == CharacterRole).Sum(x => Rank(x.Id) * x.CpPerRank);
 
     protected override void AfterRunCreated(RunState runState)
     {
         ChallengeLocalization.Ensure();
+        ChallengeShopCards.EnsurePools();
+        if (ShopSchemaVersion > 0 && Rank($"shop:{CharacterRole}:squad:SQ-08") > 0 && RandomSquadId.Length == 0)
+        {
+            var pool = ChallengeShopCatalog.Squads.Where(s => s.Id != "SQ-08").ToArray();
+            RandomSquadId = runState.Rng.Niche.NextItem(pool)?.Id ?? "";
+        }
         foreach (Player player in runState.Players)
         {
-            AttachPlayerEvents(player);
             if (Rank("G-02") > 0)
                 player.Creature.SetMaxHpInternal(Math.Max(1, player.Creature.MaxHp - 3 * Rank("G-02")));
             if (Rank("G-03") > 0)
                 player.Gold = Math.Max(0, player.Gold - 25 * Rank("G-03"));
-            if (RoleCp >= 20)
+            if (ShopSchemaVersion == 0 && RoleCp >= 20)
                 ReplaceStartingCards(runState, player);
-            if (CommonCp >= 70)
+            if (ShopSchemaVersion == 0 && CommonCp >= 70)
                 UpgradeStartingCards(player);
+            if (ShopSchemaVersion > 0 && HasShopItem("IT-08"))
+                foreach (CardModel card in player.Deck.Cards.Where(c => c.Id.Entry.Contains("STRIKE", StringComparison.OrdinalIgnoreCase)
+                    || c.Id.Entry.Contains("DEFEND", StringComparison.OrdinalIgnoreCase)).ToArray())
+                    Upgrade(card);
             if (Rank("G-10") > 0)
             {
                 CardModel bane = runState.CreateCard(ModelDb.Card<AscendersBane>(), player);
                 player.Deck.AddInternal(bane);
             }
+            if (ShopSchemaVersion > 0) GrantPurchasedStartingCards(runState, player);
+            // Starting-deck grants are not player card acquisitions. In
+            // particular, SQ-09's every-15 counter starts at zero.
+            AttachPlayerEvents(player);
         }
         MainFile.Logger.Info($"[ChallengePoints] run created: common={CommonCp}, role={RoleCp}, character={CharacterRole}.");
     }
@@ -99,6 +137,7 @@ public sealed class ChallengeContract : ModifierModel
     protected override void AfterRunLoaded(RunState runState)
     {
         ChallengeLocalization.Ensure();
+        ChallengeShopCards.EnsurePools();
         foreach (Player player in runState.Players) AttachPlayerEvents(player);
     }
 
@@ -106,6 +145,8 @@ public sealed class ChallengeContract : ModifierModel
     {
         if (Rank("G-09") > 0) player.RelicObtained += relic => OnRelicObtained(player, relic);
         if (Rank("G-11") > 0) player.Deck.CardAdded += card => OnDeckCardAdded(player, card);
+        if (ShopSchemaVersion > 0 && SquadRank("SQ-09") > 0)
+            player.Deck.CardAdded += card => OnShopDeckCardAdded(player, card);
     }
 
     private void OnRelicObtained(Player player, RelicModel relic)
@@ -163,11 +204,25 @@ public sealed class ChallengeContract : ModifierModel
         ["创世纪"] = "GENESIS", ["死神形态"] = "REAPER_FORM",
         ["血肉戏法"] = "SLEIGHT_OF_FLESH", ["触媒"] = "ACCELERANT",
         ["群蛇形态"] = "SERPENT_FORM", ["计划妥当"] = "WELL_LAID_PLANS",
-        ["创造性 AI"] = "CREATIVE_AI", ["回响形态"] = "ECHO_FORM"
+        ["创造性 AI"] = "CREATIVE_AI", ["回响形态"] = "ECHO_FORM",
+        ["愤怒"] = "ANGER", ["灵魂"] = "SOUL", ["鬼火"] = "WISP",
+        ["毒雾"] = "NOXIOUS_FUMES", ["燃料"] = "FUEL", ["铁斩波"] = "IRON_WAVE",
+        ["光明券"] = "CHALLENGE_LIGHT_VOUCHER", ["生成灵体"] = "CHALLENGE_SPIRIT_MAKER",
+        ["灵体印刷机"] = "CHALLENGE_SPIRIT_PRINTER", ["切肉刀"] = "CHALLENGE_MEAT_CLEAVER",
+        ["追猎之刃"] = "SEEKING_EDGE", ["追踪之刃"] = "SEEKING_EDGE",
+        ["君权自授"] = "MANIFEST_AUTHORITY", ["淬炼刀刃"] = "REFINE_BLADE",
+        ["筑墙"] = "BULWARK", ["铸墙"] = "BULWARK",
+        ["征召上前"] = "SUMMON_FORTH", ["武装"] = "ARMAMENTS"
     };
 
     private static CardModel? FindCard(string title)
     {
+        // Purchased cards are injected into ModelDb but deliberately excluded
+        // from ordinary reward pools / AllCards.
+        if (title == "光明券") return ModelDb.Card<ChallengeLightVoucher>();
+        if (title == "生成灵体") return ModelDb.Card<ChallengeSpiritMaker>();
+        if (title == "灵体印刷机") return ModelDb.Card<ChallengeSpiritPrinter>();
+        if (title == "切肉刀") return ModelDb.Card<ChallengeMeatCleaver>();
         if (CardIds.TryGetValue(title, out string? id))
         {
             CardModel? mapped = ModelDb.AllCards.FirstOrDefault(c => c.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase));
@@ -238,9 +293,24 @@ public sealed class ChallengeContract : ModifierModel
 
     public override decimal ModifyMerchantPrice(Player player, MerchantEntry entry, decimal cost)
     {
-        if (CommonCp >= 90 && FirstShopSeen && base.RunState.TotalFloor == FirstShopFloor && entry is not MerchantRelicEntry)
+        if (ShopSchemaVersion == 0 && CommonCp >= 90 && FirstShopSeen && base.RunState.TotalFloor == FirstShopFloor && entry is not MerchantRelicEntry)
             return 0;
-        return Rank("G-04") > 0 ? Math.Ceiling(cost * (1m + 0.1m * Rank("G-04"))) : cost;
+        decimal adjusted = Rank("G-04") > 0 ? Math.Ceiling(cost * (1m + 0.1m * Rank("G-04"))) : cost;
+        if (ShopSchemaVersion > 0 && HasShopItem("IT-09") && MerchantCardPurchases < 10 &&
+            entry is not MerchantCardRemovalEntry)
+            adjusted = Math.Ceiling(adjusted * 0.6m);
+        return adjusted;
+    }
+
+    public override Task AfterItemPurchased(Player player, MerchantEntry itemPurchased, int goldSpent)
+    {
+        if (ShopSchemaVersion > 0 && HasShopItem("IT-09") && MerchantCardPurchases < 10 &&
+            itemPurchased is not MerchantCardRemovalEntry)
+        {
+            MerchantCardPurchases++;
+            player.Creature.LoseHpInternal(4, ValueProp.Unblockable | ValueProp.Unpowered);
+        }
+        return Task.CompletedTask;
     }
 
     public override decimal ModifyHandDraw(Player player, decimal count)
@@ -248,7 +318,25 @@ public sealed class ChallengeContract : ModifierModel
         int turn = player.PlayerCombatState?.TurnNumber ?? 0;
         if (turn >= 1 && turn <= Rank("G-06")) count = Math.Max(0, count - 1);
         if (turn == 1 && CharacterRole == "silent" && Rank("SL-01") > 0) count = Math.Max(0, count - 1);
+        if (ShopSchemaVersion > 0)
+        {
+            if (SquadRank("SQ-01") > 0) count += SquadRank("SQ-01") >= 2 ? 3 : 2;
+            if (SquadRank("SQ-02") > 0) count += 1;
+            if (SquadRank("SQ-09") >= 4) count += 1;
+        }
         return count;
+    }
+
+    public override bool TryModifyEnergyCostInCombat(CardModel card, decimal originalCost, out decimal modifiedCost)
+    {
+        modifiedCost = originalCost;
+        if (ShopSchemaVersion > 0 && SquadRank("SQ-02") > 0 && card.Type == CardType.Power &&
+            card.Owner.PlayerCombatState is not null && ShopPowersPlayedThisTurn == 0)
+        {
+            modifiedCost = 0;
+            return true;
+        }
+        return false;
     }
 
     public override decimal ModifyHpLostBeforeOsty(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
@@ -256,6 +344,27 @@ public sealed class ChallengeContract : ModifierModel
         if (CharacterRole == "ironclad" && Rank("IC-04") > 0 && target.IsPlayer && cardSource?.Owner == target.Player && amount > 0)
             return amount + 1;
         return amount;
+    }
+
+    public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
+    {
+        if (ShopSchemaVersion > 0 && HasShopItem("IT-05") && !ShopTotemSpent &&
+            target.IsPlayer && amount > 0 && amount >= target.CurrentHp && target.Player is { } player)
+        {
+            ShopTotemSpent = true;
+            _shopTotemPendingPlayer = player;
+            return 0;
+        }
+        return amount;
+    }
+
+    public override async Task AfterModifyingHpLostAfterOsty()
+    {
+        Player? player = _shopTotemPendingPlayer;
+        _shopTotemPendingPlayer = null;
+        if (player?.Creature.CombatState is null) return;
+        await CreatureCmd.GainBlock(player.Creature, 20m, ValueProp.Unpowered, null);
+        await PowerCmd.Apply<RegenPower>(new ThrowingPlayerChoiceContext(), player.Creature, 6, null, null);
     }
 
 #if STS2_V110
@@ -334,7 +443,10 @@ public sealed class ChallengeContract : ModifierModel
 
     public override async Task AfterCardGeneratedForCombat(CardModel card, Player? creator)
     {
-        if (_addingStatus || creator is null) return;
+        if (creator is null) return;
+        if (ShopSchemaVersion > 0 && card.Type == CardType.Status)
+            await HandleShopStatusGenerated(card, creator);
+        if (_addingStatus) return;
         if (CharacterRole == "regent" && Rank("RG-05") > 0 && card.Pool is ColorlessCardPool
             && ++ColorlessGeneratedThisTurn > 5)
         {
@@ -366,6 +478,8 @@ public sealed class ChallengeContract : ModifierModel
 
     public override async Task AfterCardExhausted(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext context, CardModel card, bool causedByEthereal)
     {
+        if (ShopSchemaVersion > 0 && SquadRank("SQ-01") >= 3 && ++ShopExhausted % 3 == 0)
+            await PowerCmd.Apply<StrengthPower>(context, card.Owner.Creature, 1, null, null);
         if (CharacterRole == "ironclad")
         {
             if (Rank("IC-03") > 0 && ++ExhaustedThisTurn % 2 == 0)
@@ -379,13 +493,15 @@ public sealed class ChallengeContract : ModifierModel
 
     public override async Task AfterCardDrawn(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext context, CardModel card, bool fromHandDraw)
     {
+        if (_shopWatchingSoulDraw && _shopSoulDrawnCard is null && card.Owner == base.RunState.Players.FirstOrDefault())
+            _shopSoulDrawnCard = card;
         if (CharacterRole == "silent" && Rank("SL-02") > 0 && !fromHandDraw && ++NonHandDrawsThisTurn == 1)
             await CardPileCmd.AddGeneratedCardToCombat(ModelDb.Card<Dazed>().ToMutable(), PileType.Draw, card.Owner, CardPilePosition.Top);
     }
 
     public override async Task AfterCardChangedPiles(CardModel card, PileType oldPileType, AbstractModel? clonedBy)
     {
-        if (CharacterRole != "defect" || Rank("DF-04") <= 0 || card.Type != CardType.Status || card.Pile?.Type != PileType.Discard)
+        if (ShopSchemaVersion > 0 || CharacterRole != "defect" || Rank("DF-04") <= 0 || card.Type != CardType.Status || card.Pile?.Type != PileType.Discard)
             return;
         if (++StatusReroutedThisTurn % 2 == 0)
             await CardPileCmd.Add(card, PileType.Draw, CardPilePosition.Top);
@@ -393,6 +509,12 @@ public sealed class ChallengeContract : ModifierModel
 
     public override Task BeforeCardPlayed(CardPlay cardPlay)
     {
+        if (ShopSchemaVersion > 0 && SquadRank("SQ-03") >= 3 && !ShopSoulAutoplayUsedThisTurn &&
+            cardPlay.Card is Soul)
+        {
+            _shopWatchingSoulDraw = true;
+            _shopSoulDrawnCard = null;
+        }
         if (CharacterRole == "necrobinder" && Rank("NB-02") > 0 && cardPlay.Card is Soul soul && ++SoulPlayedThisTurn == 1)
             soul.DynamicVars.Cards.BaseValue = 1;
         return Task.CompletedTask;
@@ -422,6 +544,7 @@ public sealed class ChallengeContract : ModifierModel
             await PowerCmd.Apply<TemporaryStrengthPower>(context, power.Owner, 1, null, null);
         if (CharacterRole == "defect" && Rank("DF-01") > 0 && power is FocusPower && power.Owner.IsPlayer)
             await PowerCmd.Apply<StrengthPower>(context, power.Owner, -amount, null, null);
+        if (ShopSchemaVersion > 0) await HandleShopDebuffApplied(context, power, amount, applier);
     }
 
     public override Task AfterRoomEntered(AbstractRoom room)
@@ -431,6 +554,11 @@ public sealed class ChallengeContract : ModifierModel
         {
             FirstShopSeen = true;
             FirstShopFloor = base.RunState.TotalFloor;
+        }
+        if (ShopSchemaVersion > 0 && room is CombatRoom)
+        {
+            ShopEnergySpent = ShopExhausted = ShopStatusesThisTurn = ShopPowersPlayedThisTurn = 0;
+            ShopCombatStartHp = base.RunState.Players.FirstOrDefault()?.Creature.CurrentHp ?? 0;
         }
         foreach (Player player in base.RunState.Players)
         {
@@ -462,6 +590,12 @@ public sealed class ChallengeContract : ModifierModel
             MainFile.Logger.Info($"[ChallengePoints] startup rewards begin after room fade-in: common={CommonCp}, role={RoleCp}.");
             foreach (Player player in base.RunState.Players)
             {
+                if (ShopSchemaVersion > 0)
+                {
+                    if (HasShopItem("IT-01")) await GiveRelic(player, "小扭蛋");
+                    if (HasShopItem("IT-02")) await GiveRelic(player, "万花筒");
+                    continue;
+                }
                 if (CommonCp >= 15)
                 {
                     MainFile.Logger.Info("[ChallengePoints] granting startup Gorget.");
@@ -563,7 +697,7 @@ public sealed class ChallengeContract : ModifierModel
 
     private static async Task GiveRelic(Player player, string name)
     {
-        string id = name switch { "护喉甲" => "GORGET", "小扭蛋" => "SMALL_CAPSULE", _ => name };
+        string id = name switch { "护喉甲" => "GORGET", "小扭蛋" => "SMALL_CAPSULE", "万花筒" => "KALEIDOSCOPE", _ => name };
         RelicModel? relic = ModelDb.AllRelics.FirstOrDefault(x => x.Id.Entry == id)
             ?? ModelDb.AllRelics.FirstOrDefault(x => x.Title.GetFormattedText().Equals(name, StringComparison.Ordinal));
         if (relic is null) { MainFile.Logger.Warn($"[ChallengePoints] relic unavailable: {name}"); return; }
@@ -591,11 +725,25 @@ public sealed class ChallengeContract : ModifierModel
         ChallengeLocalization.Ensure();
         int turn = player.PlayerCombatState?.TurnNumber ?? 0;
         var context = new ThrowingPlayerChoiceContext();
+        // v2's status tax is a once-per-turn transfer, not an interception of
+        // the second status as it enters discard. Bottom placement is stable
+        // across save/load and does not consume the combat RNG.
+        if (ShopSchemaVersion > 0 && CharacterRole == "defect" && Rank("DF-04") > 0 && StatusReroutedThisTurn == 0)
+        {
+            CardModel? status = PileType.Discard.GetPile(player).Cards.FirstOrDefault(c => c.Type == CardType.Status);
+            if (status is not null)
+            {
+                await CardPileCmd.Add(status, PileType.Draw, CardPilePosition.Bottom);
+                StatusReroutedThisTurn = 1;
+            }
+        }
+        if (ShopSchemaVersion > 0)
+            await ApplyShopTurnStart(player, choiceContext);
         if (turn == 1)
         {
             ColorlessPlayedThisTurn = ZeroCostPlayedThisTurn = PowerPlayedThisTurn = 0;
             ForgeDecayCount = 0;
-            if (CommonCp >= 55)
+            if (ShopSchemaVersion == 0 && CommonCp >= 55)
                 await PowerCmd.Apply<PlatingPower>(context, player.Creature, 5, player.Creature, null);
             if (Rank("G-13") > 0)
                 await PowerCmd.Apply<WeakPower>(context, player.Creature, Rank("G-13"), null, null);
@@ -607,14 +755,15 @@ public sealed class ChallengeContract : ModifierModel
                 await PowerCmd.Apply<DexterityPower>(context, player.Creature, -1, null, null);
             if (Rank("G-25") > 0)
                 player.Creature.LoseHpInternal(Math.Min(Rank("G-25"), Math.Max(0, player.Creature.CurrentHp - 1)), ValueProp.Unblockable | ValueProp.Unpowered);
-            if (RoleCp >= 10) await PlayNamedReward(player, choiceContext, CharacterRole switch
+            if (ShopSchemaVersion == 0 && RoleCp >= 10) await PlayNamedReward(player, choiceContext, CharacterRole switch
             {
                 "ironclad" => "燃烧", "regent" => "环绕轨道", "necrobinder" => "友谊",
                 "silent" => "灵动步伐", "defect" => "碎片整理", _ => ""
             });
-            if (RoleCp >= 35) await ChooseAndPlayRewards(player, choiceContext);
+            if (ShopSchemaVersion == 0 && RoleCp >= 35) await ChooseAndPlayRewards(player, choiceContext);
         }
-        if (CharacterRole == "ironclad" && ((turn % 2 == 1 && Rank("IC-02") > 0) || (turn % 2 == 0 && Rank("IC-06") > 0)))
+        if (CharacterRole == "ironclad" && player.Creature.GetPowerAmount<StrengthPower>() >= 1
+            && ((turn % 2 == 1 && Rank("IC-02") > 0) || (turn % 2 == 0 && Rank("IC-06") > 0)))
             await PowerCmd.Apply<StrengthPower>(context, player.Creature, -1, null, null);
         if (CharacterRole == "defect" && turn >= 6 && Rank("DF-05") > 0)
             await PowerCmd.Apply<FocusPower>(context, player.Creature, -1, null, null);
@@ -712,6 +861,17 @@ public sealed class ChallengeContract : ModifierModel
         Player owner = play.Card.Owner;
         if (owner.PlayerCombatState is null) return;
         CardModel card = play.Card;
+        if (ShopSchemaVersion > 0 && card is Soul && _shopWatchingSoulDraw)
+        {
+            _shopWatchingSoulDraw = false;
+            CardModel? drawn = _shopSoulDrawnCard;
+            _shopSoulDrawnCard = null;
+            ShopSoulAutoplayUsedThisTurn = true;
+            if (drawn?.Pile?.Type == PileType.Hand && !drawn.Keywords.Contains(CardKeyword.Unplayable))
+                await CardCmd.AutoPlay(context, drawn, null);
+        }
+        if (ShopSchemaVersion > 0 && SquadRank("SQ-02") > 0 && card.Type == CardType.Power && ShopPowersPlayedThisTurn++ == 0)
+            owner.Creature.LoseHpInternal(4, ValueProp.Unblockable | ValueProp.Unpowered);
         if (card.Pool is ColorlessCardPool && CharacterRole == "regent" && Rank("RG-08") > 0)
         {
             if (++ColorlessPlayedThisTurn == 2) owner.PlayerCombatState.LoseEnergy(1);
@@ -773,11 +933,60 @@ public sealed class ChallengeContract : ModifierModel
                 await PowerCmd.ModifyAmount(choiceContext, vigor, -2, null, null);
             if (CharacterRole == "necrobinder" && Rank("NB-05") > 0 && player.Osty is { IsAlive: true } osty)
                 osty.LoseHpInternal(2, ValueProp.Unblockable | ValueProp.Unpowered);
+            if (ShopSchemaVersion > 0 && HasShopItem("IT-04"))
+                await CreatureCmd.GainBlock(player.Creature, 1m, ValueProp.Unpowered, null);
         }
         ColorlessPlayedThisTurn = ZeroCostPlayedThisTurn = PowerPlayedThisTurn = 0;
         ExhaustedThisTurn = GeneratedThisTurn = SoulGeneratedThisTurn = VoidPlayedThisTurn = 0;
         ColorlessGeneratedThisTurn = SoulPlayedThisTurn = StatusReroutedThisTurn = 0;
         SlyPlayedThisTurn = CardsPlayedThisTurn = NonHandDrawsThisTurn = 0;
+        ShopStatusesThisTurn = ShopPowersPlayedThisTurn = 0;
+        ShopSoulAutoplayUsedThisTurn = false;
+    }
+
+    public override Task AfterDeath(PlayerChoiceContext choiceContext, Creature creature, bool wasRemovalPrevented, float deathAnimLength)
+    {
+        if (ShopSchemaVersion <= 0 || SquadRank("SQ-07") < 4 ||
+            creature.Side != CombatSide.Enemy || wasRemovalPrevented) return Task.CompletedTask;
+        Player? player = base.RunState.Players.FirstOrDefault();
+        if (player is null) return Task.CompletedTask;
+        var seen = new HashSet<CardModel>();
+        foreach (CardModel card in player.Deck.Cards.Concat(player.PlayerCombatState?.AllCards ?? Enumerable.Empty<CardModel>()))
+        {
+            if (!seen.Add(card) || card is not IronWave) continue;
+            // Iron Wave's UpgradeInternal does not enforce MaxUpgradeLevel.
+            // Deliberately bypass IsUpgradable to support the purchased
+            // unlimited-upgrade effect, including saved levels above one.
+            card.UpgradeInternal();
+            card.FinalizeUpgradeInternal();
+        }
+        return Task.CompletedTask;
+    }
+
+    public override async Task AfterEnergySpent(CardModel card, int amount)
+    {
+        if (ShopSchemaVersion <= 0 || amount <= 0) return;
+        if (SquadRank("SQ-01") > 0)
+        {
+            int before = ShopEnergySpent / 3;
+            ShopEnergySpent += amount;
+            int gained = ShopEnergySpent / 3 - before;
+            if (gained > 0)
+                await PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), card.Owner.Creature, gained, null, card);
+        }
+        if (SquadRank("SQ-10") > 0)
+            await ForgeCmd.Forge(amount * 3m, card.Owner, this);
+    }
+
+    public override async Task AfterCombatEnd(CombatRoom room)
+    {
+        if (ShopSchemaVersion <= 0 || SquadRank("SQ-02") < 3) return;
+        foreach (Player player in base.RunState.Players)
+        {
+            int lost = Math.Max(0, ShopCombatStartHp - player.Creature.CurrentHp);
+            int percent = SquadRank("SQ-02") >= 4 ? 60 : 50;
+            if (lost > 0) await CreatureCmd.Heal(player.Creature, Math.Floor(lost * percent / 100m));
+        }
     }
 
     public override Task AfterRestSiteHeal(Player player, bool isMimicked)

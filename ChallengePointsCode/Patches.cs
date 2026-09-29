@@ -10,8 +10,27 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Combat;
 
 namespace ChallengePoints;
+
+[HarmonyPatch(typeof(PowerCmd), nameof(PowerCmd.Decrement))]
+internal static class ChallengePoisonDoesNotDecayPatch
+{
+    private static bool Prefix(PowerModel power, ref Task __result)
+    {
+        if (power is PoisonPower && power.Owner.Side == CombatSide.Enemy &&
+            power.Owner.CombatState?.RunState.Modifiers.OfType<ChallengeContract>().Any(c =>
+                c.ShopSchemaVersion > 0 && c.SquadRank("SQ-04") >= 4) == true)
+        {
+            __result = Task.CompletedTask;
+            return false;
+        }
+        return true;
+    }
+}
 
 [HarmonyPatch(typeof(AscensionHelper), nameof(AscensionHelper.GetHoverTip))]
 internal static class ChallengeAscensionPortraitTextPatch
@@ -56,7 +75,17 @@ internal static class ChallengeNewRunTracePatch
 internal static class ChallengeRunUiTracePatch
 {
     private static void Prefix() => MainFile.Logger.Info("[ChallengePoints] run UI initialization begin.");
-    private static void Postfix() => MainFile.Logger.Info("[ChallengePoints] run UI initialization complete.");
+    private static void Postfix(NRun __instance)
+    {
+        MainFile.Logger.Info("[ChallengePoints] run UI initialization complete.");
+        try
+        {
+            ChallengeContract? contract = RunManager.Instance.DebugOnlyGetState()?.Modifiers.OfType<ChallengeContract>().FirstOrDefault();
+            if (contract is not null && __instance.GetNodeOrNull<ChallengeContractHud>("ChallengeContractHud") is null)
+                __instance.AddChild(new ChallengeContractHud(contract));
+        }
+        catch (Exception ex) { MainFile.Logger.Warn($"[ChallengePoints] contract display unavailable: {ex.Message}"); }
+    }
     private static Exception? Finalizer(Exception? __exception)
     {
         if (__exception is not null)
@@ -100,11 +129,12 @@ internal static class NewRunPatch
         {
             if (players.Count != 1 || modifiers.Any(x => x is ChallengeContract)) return;
             string role = ChallengeCatalog.NormalizeRole(players[0].Character.Id.Entry);
-            if (ChallengeSelection.Score("common") == 0 && ChallengeSelection.Score(role) == 0) return;
+            if (ChallengeSelection.Score("common") == 0 && ChallengeSelection.Score(role) == 0 && ChallengeSelection.Spent(role) == 0) return;
             var contract = ModelDb.Modifier<ChallengeContract>().ToMutable() as ChallengeContract;
             if (contract is null) return;
             contract.CharacterRole = role;
             contract.ContractData = ChallengeSelection.Snapshot(role);
+            contract.ShopSchemaVersion = 1;
             modifiers = modifiers.Append(contract).ToArray();
             MainFile.Logger.Info("[ChallengePoints] challenge contract attached to new run.");
         }
@@ -185,6 +215,8 @@ internal static class ChallengeStartupRewardsFadePatch
                     // supplied by another mod fails during its own callback.
                     MainFile.Logger.Error($"[ChallengePoints] startup reward failed after fade-in: {ex}");
                 }
+                try { await contract.ProcessShopChoicesAfterFadeIn(); }
+                catch (Exception ex) { MainFile.Logger.Error($"[ChallengePoints] shop choice failed after fade-in: {ex}"); }
             }
         });
     }

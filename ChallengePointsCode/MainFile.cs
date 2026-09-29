@@ -22,9 +22,10 @@ public partial class MainFile : Node
         SavedPropertiesTypeCache.InjectTypeIntoCache(typeof(ChallengeContract));
 #endif
         new Harmony(ModId).PatchAll();
-        if (System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_SMOKE") == "1"
+        if ((System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_SMOKE") == "1"
+                || !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION")))
             && Engine.GetMainLoop() is SceneTree tree && tree.Root is not null)
             tree.Root.CallDeferred(Node.MethodName.AddChild, new SmokeRunner());
-        Logger.Info($"[ChallengePoints] loaded v0.1.4; ascension portrait text guard and startup stage tracing enabled; catalog={ChallengeCatalog.All.Count} challenges.");
+        Logger.Info($"[ChallengePoints] loaded v0.2.0; squad shop and startup-stage guard enabled; catalog={ChallengeCatalog.All.Count} challenges.");
     }
 }

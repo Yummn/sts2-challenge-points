@@ -7,6 +7,8 @@ using MegaCrit.Sts2.Core.Models.Characters;
 using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Saves.Runs;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Unlocks;
 using System.Reflection;
 
@@ -20,7 +22,12 @@ internal sealed partial class SmokeRunner : Node
     {
         try
         {
-            await ToSignal(GetTree().CreateTimer(5), SceneTreeTimer.SignalName.Timeout);
+            await ToSignal(GetTree().CreateTimer(12), SceneTreeTimer.SignalName.Timeout);
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION")))
+            {
+                await RunIntegration();
+                return;
+            }
             if (ChallengeArt.Load("contract_panel.png") is null || ChallengeArt.MalleableIcon is null
                 || ChallengeArt.AmbergrisIcon is null)
                 throw new InvalidOperationException("embedded hand-painted art failed to load");
@@ -39,6 +46,17 @@ internal sealed partial class SmokeRunner : Node
             }
             ui.QueueFree();
             ChallengeContract canonical = ModelDb.Modifier<ChallengeContract>();
+            ChallengeShopCards.EnsurePools();
+            foreach (CardModel card in new CardModel[]
+            {
+                ModelDb.Card<ChallengeLightVoucher>(), ModelDb.Card<ChallengeSpiritMaker>(),
+                ModelDb.Card<ChallengeSpiritPrinter>(), ModelDb.Card<ChallengeMeatCleaver>()
+            })
+            {
+                if (card.Pool is null || !ReferenceEquals(ModelDb.GetById<CardModel>(card.Id), card) ||
+                    string.IsNullOrWhiteSpace(card.PortraitPath))
+                    throw new InvalidOperationException($"shop card registration failed: {card.Id.Entry}");
+            }
 #if !STS2_V110
             var ambergris = ModelDb.Potion<ChallengeAmbergris>();
             if (ambergris.Image is null || ambergris.Pool.GetType().Name != "EventPotionPool")
@@ -58,7 +76,7 @@ internal sealed partial class SmokeRunner : Node
                 var selectedRun = RunState.CreateForNewRun(new[] { selectedPlayer }, ActModel.GetDefaultList().Select(a => a.ToMutable()).ToArray(),
                     Array.Empty<ModifierModel>(), GameMode.Standard, 0, "CHALLENGEPOINTS_SMOKE");
                 var attached = selectedRun.Modifiers.OfType<ChallengeContract>().SingleOrDefault();
-                if (attached is null || attached.CommonCp != 1 || attached.RoleCp != 8)
+                if (attached is null || attached.ShopSchemaVersion != 1 || attached.CommonCp != 2 || attached.RoleCp != 8)
                     throw new InvalidOperationException("new-run patch did not attach the selected contract");
             }
             finally
@@ -113,6 +131,36 @@ internal sealed partial class SmokeRunner : Node
             if (rewardContract.CommonCp < 70 || rewardContract.RoleCp < 20 || twin is null || shrug is null
                 || !twin.IsUpgraded || !shrug.IsUpgraded)
                 throw new InvalidOperationException("20/70-CP starting deck transformation or upgrade failed");
+            var shopIron = (ChallengeContract)canonical.ToMutable();
+            shopIron.ShopSchemaVersion = 1;
+            shopIron.CharacterRole = "ironclad";
+            shopIron.ContractData = "{\"shop:ironclad:squad:SQ-07\":3}";
+            var ironPlayer = Player.CreateForNewRun<Ironclad>(UnlockState.all, 2uL);
+            var ironRun = RunState.CreateForTest(new[] { ironPlayer }, modifiers: new ModifierModel[] { shopIron });
+            shopIron.OnRunCreated(ironRun);
+            if (ironPlayer.Deck.Cards.Count(c => c is MegaCrit.Sts2.Core.Models.Cards.IronWave) < 8 ||
+                !ironPlayer.Deck.Cards.Any(c => c is ChallengeMeatCleaver) ||
+                ironPlayer.Deck.Cards.Any(c => c.Id.Entry.Contains("STRIKE_IRONCLAD") || c.Id.Entry.Contains("DEFEND_IRONCLAD")))
+                throw new InvalidOperationException("SQ-07 starter replacement/custom card failed");
+            var shopSoul = (ChallengeContract)canonical.ToMutable();
+            shopSoul.ShopSchemaVersion = 1;
+            shopSoul.CharacterRole = "necrobinder";
+            shopSoul.ContractData = "{\"shop:necrobinder:squad:SQ-09\":3}";
+            var soulPlayer = Player.CreateForNewRun<MegaCrit.Sts2.Core.Models.Characters.Necrobinder>(UnlockState.all, 3uL);
+            var soulRun = RunState.CreateForTest(new[] { soulPlayer }, modifiers: new ModifierModel[] { shopSoul });
+            shopSoul.OnRunCreated(soulRun);
+            if (soulPlayer.Deck.Cards.SingleOrDefault(c => c is ChallengeSpiritPrinter) is not { IsUpgraded: true })
+                throw new InvalidOperationException("SQ-09 spirit printer starter card failed");
+            var shopRegent = (ChallengeContract)canonical.ToMutable();
+            shopRegent.ShopSchemaVersion = 1;
+            shopRegent.CharacterRole = "regent";
+            shopRegent.ContractData = "{\"shop:regent:squad:SQ-10\":3}";
+            var regentPlayer = Player.CreateForNewRun<MegaCrit.Sts2.Core.Models.Characters.Regent>(UnlockState.all, 4uL);
+            var regentRun = RunState.CreateForTest(new[] { regentPlayer }, modifiers: new ModifierModel[] { shopRegent });
+            shopRegent.OnRunCreated(regentRun);
+            foreach (string id in new[] { "REFINE_BLADE", "BULWARK", "SUMMON_FORTH", "ARMAMENTS" })
+                if (!regentPlayer.Deck.Cards.Any(c => c.Id.Entry == id))
+                    throw new InvalidOperationException($"SQ-10 starting card unavailable: {id}");
             MainFile.Logger.Info("[ChallengePointsSmoke] PASS: model registration, two independent CP tracks, run-start penalties, save round trip.");
             GetTree().Quit(0);
         }
@@ -121,5 +169,45 @@ internal sealed partial class SmokeRunner : Node
             MainFile.Logger.Error($"[ChallengePointsSmoke] FAIL: {ex}");
             GetTree().Quit(1);
         }
+    }
+
+    private async Task RunIntegration()
+    {
+        var contract = (ChallengeContract)ModelDb.Modifier<ChallengeContract>().ToMutable();
+        contract.CharacterRole = "ironclad";
+        contract.ShopSchemaVersion = 1;
+        bool choiceTest = System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION") == "choice";
+        contract.ContractData = choiceTest
+            ? "{\"shop:ironclad:item:IT-03\":1}"
+            : "{\"shop:ironclad:squad:SQ-07\":3}";
+        NGame game = NGame.Instance ?? throw new InvalidOperationException("NGame not ready for PC integration");
+        Task<RunState> start = game.StartNewSingleplayerRun(
+            ModelDb.Character<Ironclad>(), false, ActModel.GetDefaultList(),
+            new ModifierModel[] { contract }, "CHALLENGEPOINTSINTEGRATION", GameMode.Standard);
+        if (choiceTest)
+        {
+            await Task.Delay(18000);
+            if (start.IsFaulted) await start;
+            if (ChallengeContract.ShopChoiceOpenedCount == 0 || start.IsCompleted)
+                throw new InvalidOperationException("IT-03 choice did not remain pending for selection");
+            MainFile.Logger.Info("[ChallengePointsIntegration] PASS: IT-03 ability choice opened and awaits selection.");
+            GetTree().Quit(0);
+            return;
+        }
+        Task finished = await Task.WhenAny(start, Task.Delay(45000));
+        if (!ReferenceEquals(finished, start))
+            throw new TimeoutException("PC new-run startup did not complete within 45 seconds");
+        RunState run = await start;
+        await ToSignal(GetTree().CreateTimer(2), SceneTreeTimer.SignalName.Timeout);
+        NRun? scene = NRun.Instance;
+        if (run.CurrentRoom is not EventRoom || scene is null ||
+            !run.Modifiers.OfType<ChallengeContract>().Any())
+            throw new InvalidOperationException($"new-run UI/Neow not ready: room={run.CurrentRoom?.GetType().Name}");
+        if (scene.GetNodeOrNull<ChallengeContractHud>("ChallengeContractHud") is null)
+            throw new InvalidOperationException("contract HUD missing from PC run");
+        string capture = Path.Combine(Path.GetDirectoryName(typeof(MainFile).Assembly.Location)!, "integration-neow.png");
+        GetViewport().GetTexture().GetImage().SavePng(capture);
+        MainFile.Logger.Info($"[ChallengePointsIntegration] PASS: PC new-run and Neow loaded; capture={capture}");
+        GetTree().Quit(0);
     }
 }
