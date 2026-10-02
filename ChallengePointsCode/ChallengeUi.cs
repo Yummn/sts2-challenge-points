@@ -181,7 +181,7 @@ internal sealed partial class ChallengeUi : CanvasLayer
             _roleHeading.Text = "小商品";
             BuildSquads(_commonList, role);
             BuildItems(_roleList, role);
-            _commonRewards.Text = "分队可同时购买；价格为当前级总价，升级仅补差价。";
+            _commonRewards.Text = "所有角色的分队均可同时购买；价格为当前级总价，升级仅补差价。";
             _roleRewards.Text = "不确定分队随机跨角色，结果在开局时固定。";
         }
         else
@@ -209,7 +209,7 @@ internal sealed partial class ChallengeUi : CanvasLayer
         var scroll = target.GetParent() as ScrollContainer;
         int previousScroll = scroll?.ScrollVertical ?? 0;
         ClearRows(target);
-        foreach (ChallengeSquad squad in ChallengeShopCatalog.Squads.Where(x => x.Role == "common" || x.Role == role))
+        foreach (ChallengeSquad squad in ChallengeShopCatalog.Squads)
         {
             int rank = ChallengeSelection.SquadRank(role, squad.Id);
             var panel = new PanelContainer();

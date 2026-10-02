@@ -27,6 +27,7 @@ internal static class ChallengeShopCards
     {
         if (_poolsAssigned) return;
         SetPool(ModelDb.Card<ChallengeLightVoucher>(), ModelDb.CardPool<IroncladCardPool>());
+        SetPool(ModelDb.Card<ChallengeBandage>(), ModelDb.CardPool<ColorlessCardPool>());
         SetPool(ModelDb.Card<ChallengeMeatCleaver>(), ModelDb.CardPool<IroncladCardPool>());
         SetPool(ModelDb.Card<ChallengeSpiritMaker>(), ModelDb.CardPool<NecrobinderCardPool>());
         SetPool(ModelDb.Card<ChallengeSpiritPrinter>(), ModelDb.CardPool<NecrobinderCardPool>());
@@ -38,6 +39,20 @@ internal static class ChallengeShopCards
         if (PoolField is null) throw new MissingFieldException(typeof(CardModel).FullName, "_pool");
         PoolField.SetValue(card, pool);
     }
+}
+
+public sealed class ChallengeBandage : CardModel
+{
+    public override IEnumerable<CardKeyword> CanonicalKeywords => new[] { CardKeyword.Exhaust };
+    protected override IEnumerable<DynamicVar> CanonicalVars => new[] { new HealVar(4) };
+    public override string PortraitPath => ModelDb.AllCards.FirstOrDefault(c =>
+        c is not ChallengeBandage && (c.Id.Entry == "BANDAGE" || c.Title == "包扎"))?.PortraitPath
+        ?? ModelDb.Card<Apparition>().PortraitPath;
+    public override string BetaPortraitPath => PortraitPath;
+    public ChallengeBandage() : base(0, CardType.Skill, CardRarity.Event, TargetType.Self) { }
+    protected override Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay) =>
+        CreatureCmd.Heal(Owner.Creature, DynamicVars.Heal.BaseValue);
+    protected override void OnUpgrade() => DynamicVars.Heal.UpgradeValueBy(2);
 }
 
 public sealed class ChallengeLightVoucher : CardModel

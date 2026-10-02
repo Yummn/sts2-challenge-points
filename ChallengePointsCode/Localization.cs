@@ -49,6 +49,8 @@ internal static class ChallengeLocalization
                 {
                     ["CHALLENGE_LIGHT_VOUCHER.title"] = "光明券",
                     ["CHALLENGE_LIGHT_VOUCHER.description"] = "获得 1 点[gold]能量[/gold]。消耗。",
+                    ["CHALLENGE_BANDAGE.title"] = "包扎",
+                    ["CHALLENGE_BANDAGE.description"] = "回复 {Heal:diff()} 点生命。消耗。",
                     ["CHALLENGE_SPIRIT_MAKER.title"] = "生成灵体",
                     ["CHALLENGE_SPIRIT_MAKER.description"] = "获得 {Block:diff()} 点[gold]格挡[/gold]。获得 2 层[gold]易伤[/gold]。将 1 张[gold]灵体[/gold]加入抽牌堆。",
                     ["CHALLENGE_SPIRIT_PRINTER.title"] = "灵体印刷机",
@@ -60,6 +62,8 @@ internal static class ChallengeLocalization
                 {
                     ["CHALLENGE_LIGHT_VOUCHER.title"] = "Light Voucher",
                     ["CHALLENGE_LIGHT_VOUCHER.description"] = "Gain 1 Energy. Exhaust.",
+                    ["CHALLENGE_BANDAGE.title"] = "Bandage",
+                    ["CHALLENGE_BANDAGE.description"] = "Heal {Heal:diff()} HP. Exhaust.",
                     ["CHALLENGE_SPIRIT_MAKER.title"] = "Create Apparition",
                     ["CHALLENGE_SPIRIT_MAKER.description"] = "Gain {Block:diff()} Block. Gain 2 Vulnerable. Add an Apparition to your draw pile.",
                     ["CHALLENGE_SPIRIT_PRINTER.title"] = "Apparition Printer",

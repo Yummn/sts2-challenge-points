@@ -61,7 +61,7 @@ internal static class ChallengeSelection
     internal static bool SetSquadRank(string role, string id, int rank)
     {
         ChallengeSquad? squad = ChallengeShopCatalog.FindSquad(id);
-        if (squad is null || (squad.Role != "common" && squad.Role != role)) return false;
+        if (squad is null) return false;
         rank = Math.Clamp(rank, 0, 4);
         string key = PurchaseKey(role, "squad", id);
         int before = Ranks.GetValueOrDefault(key);
@@ -157,8 +157,7 @@ internal static class ChallengeSelection
                 {
                     string[] parts = pair.Key.Split(':');
                     if (parts.Length != 4) continue;
-                    if (parts[2] == "squad" && ChallengeShopCatalog.FindSquad(parts[3]) is { } squad &&
-                        (squad.Role == "common" || squad.Role == parts[1]))
+                    if (parts[2] == "squad" && ChallengeShopCatalog.FindSquad(parts[3]) is not null)
                         Ranks[pair.Key] = Math.Clamp(pair.Value, 0, 4);
                     else if (parts[2] == "item" && ChallengeShopCatalog.FindItem(parts[3]) is not null)
                         Ranks[pair.Key] = Math.Clamp(pair.Value, 0, 1);

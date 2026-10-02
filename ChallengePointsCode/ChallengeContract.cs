@@ -221,6 +221,7 @@ public sealed partial class ChallengeContract : ModifierModel
         // Purchased cards are injected into ModelDb but deliberately excluded
         // from ordinary reward pools / AllCards.
         if (title == "光明券") return ModelDb.Card<ChallengeLightVoucher>();
+        if (title == "包扎") return ModelDb.Card<ChallengeBandage>();
         if (title == "生成灵体") return ModelDb.Card<ChallengeSpiritMaker>();
         if (title == "灵体印刷机") return ModelDb.Card<ChallengeSpiritPrinter>();
         if (title == "切肉刀") return ModelDb.Card<ChallengeMeatCleaver>();
@@ -561,7 +562,7 @@ public sealed partial class ChallengeContract : ModifierModel
             await PowerCmd.Apply<TemporaryStrengthPower>(context, power.Owner, 1, null, null);
         if (CharacterRole == "defect" && Rank("DF-01") > 0 && power is FocusPower && power.Owner.IsPlayer)
             await PowerCmd.Apply<StrengthPower>(context, power.Owner, -amount, null, null);
-        if (ShopSchemaVersion > 0) await HandleShopDebuffApplied(context, power, amount, applier);
+        if (ShopSchemaVersion > 0) await HandleShopDebuffApplied(context, power, amount, applier, cardSource);
     }
 
     public override Task AfterRoomEntered(AbstractRoom room)
@@ -720,13 +721,19 @@ public sealed partial class ChallengeContract : ModifierModel
 
     public override bool TryModifyRestSiteOptions(Player player, ICollection<RestSiteOption> options)
     {
-        if (Rank("G-23") <= 0 || string.IsNullOrEmpty(LastRestOption)
-            || base.RunState.TotalFloor != LastRestFloor + 1) return false;
+        if (Rank("G-23") <= 0 || string.IsNullOrEmpty(LastRestOption)) return false;
         // Never remove the last available choice; special rest-site actions stay legal.
         var blocked = options.Where(o => o.GetType().Name == LastRestOption).ToArray();
         if (blocked.Length == 0 || options.Count <= blocked.Length) return false;
         foreach (RestSiteOption option in blocked) options.Remove(option);
         return true;
+    }
+
+    internal void RecordRestSiteOption(RestSiteOption option)
+    {
+        if (Rank("G-23") <= 0) return;
+        LastRestOption = option.GetType().Name;
+        LastRestFloor = base.RunState.TotalFloor;
     }
 
     public override Task AfterRestSiteSmith(Player player)
@@ -924,7 +931,8 @@ public sealed partial class ChallengeContract : ModifierModel
                 await CardCmd.AutoPlay(context, drawn, null);
         }
         if (ShopSchemaVersion > 0 && SquadRank("SQ-02") > 0 && card.Type == CardType.Power && ShopPowersPlayedThisTurn++ == 0)
-            owner.Creature.LoseHpInternal(4, ValueProp.Unblockable | ValueProp.Unpowered);
+            await CreatureCmd.Damage(context, owner.Creature, 4m,
+                ValueProp.Unblockable | ValueProp.Unpowered, owner.Creature);
         if (card.Pool is ColorlessCardPool && CharacterRole == "regent" && Rank("RG-08") > 0)
         {
             if (++ColorlessPlayedThisTurn == 2) owner.PlayerCombatState.LoseEnergy(1);

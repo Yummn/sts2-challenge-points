@@ -56,6 +56,9 @@ internal sealed partial class SmokeRunner : Node
             ChallengeShopCards.EnsurePools();
             if (ChallengeCatalog.Find("G-12")?.MaxRank != 3 || ModelDb.Relic<ChallengeFruitKnifeRelic>().Icon is null)
                 throw new InvalidOperationException("G-12 rank range or Fruit Knife relic registration failed");
+            if (ModelDb.Card<ChallengeBandage>().EnergyCost.Canonical != 0 ||
+                !ModelDb.Card<ChallengeBandage>().CanonicalKeywords.Contains(CardKeyword.Exhaust))
+                throw new InvalidOperationException("SQ-02 Bandage card registration failed");
             foreach (CardModel card in new CardModel[]
             {
                 ModelDb.Card<ChallengeLightVoucher>(), ModelDb.Card<ChallengeSpiritMaker>(),
@@ -218,7 +221,7 @@ internal sealed partial class SmokeRunner : Node
         };
         contract.ShopSchemaVersion = 1;
         bool choiceTest = mode == "choice";
-        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff";
+        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff" or "mixed";
         contract.ContractData = mode switch
         {
             "choice" => "{\"shop:ironclad:item:IT-03\":1}",
@@ -229,6 +232,7 @@ internal sealed partial class SmokeRunner : Node
             "soul" => "{\"shop:necrobinder:squad:SQ-03\":4}",
             "spirit" => "{\"shop:necrobinder:squad:SQ-09\":1}",
             "status" => "{\"shop:defect:squad:SQ-05\":3}",
+            "mixed" => "{\"shop:ironclad:squad:SQ-01\":1,\"shop:ironclad:squad:SQ-02\":2,\"shop:ironclad:squad:SQ-04\":1}",
             _ => "{\"shop:ironclad:squad:SQ-07\":3}"
         };
         NGame game = NGame.Instance ?? throw new InvalidOperationException("NGame not ready for PC integration");
@@ -347,6 +351,16 @@ internal sealed partial class SmokeRunner : Node
                 if (contract.ShopStatusesThisTurn < 1 || !PileType.Hand.GetPile(player).Cards.Any(c => c.Id.Entry == "FUEL"))
                     throw new InvalidOperationException("SQ-05 status-generated fuel did not appear");
                 MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-05 generated fuel after status in PC combat.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "mixed")
+            {
+                if (!player.Deck.Cards.Any(c => c.Id.Entry == "ANGER") ||
+                    !player.Deck.Cards.Any(c => c.Id.Entry == "NOXIOUS_FUMES") ||
+                    !player.Deck.Cards.Any(c => c is ChallengeBandage))
+                    throw new InvalidOperationException("cross-character squads did not mix their starter cards");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: cross-character squads mixed on one run; Anger, Noxious Fumes and Bandage present.");
                 GetTree().Quit(0);
                 return;
             }

@@ -26,6 +26,6 @@ public partial class MainFile : Node
                 || !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION")))
             && Engine.GetMainLoop() is SceneTree tree && tree.Root is not null)
             tree.Root.CallDeferred(Node.MethodName.AddChild, new SmokeRunner());
-        Logger.Info($"[ChallengePoints] loaded v0.2.3; squad shop and startup-stage guard enabled; catalog={ChallengeCatalog.All.Count} challenges.");
+        Logger.Info($"[ChallengePoints] loaded v0.2.4; mixed squads and corrected squad triggers enabled; catalog={ChallengeCatalog.All.Count} challenges.");
     }
 }

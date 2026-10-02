@@ -19,6 +19,7 @@ public sealed partial class ChallengeContract
 {
     internal static int ShopChoiceOpenedCount;
     private bool _shopApplyingPoison;
+    private readonly HashSet<MegaCrit.Sts2.Core.Entities.Creatures.Creature> _shopPoisonTargets = new();
     private bool _shopAddingAcquisitionReward;
     private bool _shopSuppressAcquisition;
     private bool _shopProcessingChoices;
@@ -44,9 +45,11 @@ public sealed partial class ChallengeContract
     private void GrantPurchasedStartingCards(RunState run, Player player)
     {
         if (SquadRank("SQ-01") > 0)
-            for (int i = 0; i < 3; i++) AddCard("愤怒");
+            AddCard("愤怒");
         if (SquadRank("SQ-04") > 0)
-            for (int i = 0; i < 3; i++) AddCard("毒雾");
+            AddCard("毒雾");
+        if (SquadRank("SQ-02") >= 2)
+            AddCard("包扎");
         if (SquadRank("SQ-09") > 0)
             AddCard(SquadRank("SQ-09") >= 2 ? "灵体印刷机" : "生成灵体", SquadRank("SQ-09") >= 3);
         if (SquadRank("SQ-10") >= 2)
@@ -94,9 +97,11 @@ public sealed partial class ChallengeContract
     private async Task ApplyShopTurnStart(Player player, PlayerChoiceContext context)
     {
         if (SquadRank("SQ-01") is > 0 and < 4)
-            player.Creature.LoseHpInternal(1, ValueProp.Unblockable | ValueProp.Unpowered);
+            await CreatureCmd.Damage(context, player.Creature, 1m,
+                ValueProp.Unblockable | ValueProp.Unpowered, player.Creature);
         if (SquadRank("SQ-02") > 0)
-            player.Creature.LoseHpInternal(2, ValueProp.Unblockable | ValueProp.Unpowered);
+            await CreatureCmd.Damage(context, player.Creature, 2m,
+                ValueProp.Unblockable | ValueProp.Unpowered, player.Creature);
 
         if (SquadRank("SQ-03") > 0)
         {
@@ -111,9 +116,6 @@ public sealed partial class ChallengeContract
                     await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Draw, player, CardPilePosition.Bottom);
                 }
         }
-
-        if (SquadRank("SQ-02") >= 2)
-            await CardPileCmd.AddGeneratedCardToCombat(GenerateForCombat(ModelDb.Card<ChallengeLightVoucher>(), player), PileType.Hand, player);
 
         if (SquadRank("SQ-06") > 0)
         {
@@ -147,11 +149,13 @@ public sealed partial class ChallengeContract
             await PowerCmd.Apply<TemporaryFocusPower>(context, creator.Creature, 1, null, null);
     }
 
-    private async Task HandleShopDebuffApplied(PlayerChoiceContext context, PowerModel power, decimal amount, MegaCrit.Sts2.Core.Entities.Creatures.Creature? applier)
+    private async Task HandleShopDebuffApplied(PlayerChoiceContext context, PowerModel power, decimal amount,
+        MegaCrit.Sts2.Core.Entities.Creatures.Creature? applier, CardModel? cardSource)
     {
         if (_shopApplyingPoison || SquadRank("SQ-04") <= 0 || amount <= 0 ||
+            (power is PoisonPower && cardSource is null) ||
             power.Owner.Side != MegaCrit.Sts2.Core.Combat.CombatSide.Enemy || power.Type != PowerType.Debuff ||
-            applier?.IsPlayer != true)
+            applier?.IsPlayer != true || !_shopPoisonTargets.Add(power.Owner))
             return;
         _shopApplyingPoison = true;
         try
@@ -163,7 +167,11 @@ public sealed partial class ChallengeContract
             await CreatureCmd.Damage(context, power.Owner, damage, ValueProp.Unpowered, owner.Creature);
             await PowerCmd.Apply<PoisonPower>(context, power.Owner, poison, owner.Creature, null);
         }
-        finally { _shopApplyingPoison = false; }
+        finally
+        {
+            _shopPoisonTargets.Remove(power.Owner);
+            _shopApplyingPoison = false;
+        }
     }
 
     internal async Task ProcessShopChoicesAfterFadeIn()

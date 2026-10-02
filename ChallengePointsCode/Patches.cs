@@ -31,6 +31,29 @@ internal static class ChallengeFruitKnifeRestIconPatch
     }
 }
 
+[HarmonyPatch(typeof(RestSiteOption), nameof(RestSiteOption.OnSelect))]
+internal static class ChallengeRestSiteSelectionPatch
+{
+    private static void Postfix(RestSiteOption __instance, Task<bool> __result)
+    {
+        _ = RecordAfterSelection(__instance, __result);
+    }
+
+    private static async Task RecordAfterSelection(RestSiteOption option, Task<bool> result)
+    {
+        try
+        {
+            if (!await result || AccessTools.Property(typeof(RestSiteOption), "Owner")?.GetValue(option) is not Player owner)
+                return;
+            owner.RunState.Modifiers.OfType<ChallengeContract>().FirstOrDefault()?.RecordRestSiteOption(option);
+        }
+        catch (Exception ex)
+        {
+            MainFile.Logger.Warn($"[ChallengePoints] rest-site selection record failed: {ex.Message}");
+        }
+    }
+}
+
 // Iron Wave's native setter rejects upgrades above its normal maximum of one.
 // The squad has to raise that maximum both in combat and while old upgraded
 // cards are reconstructed from a save (before they have an Owner).
