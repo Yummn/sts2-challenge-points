@@ -48,6 +48,7 @@ public sealed class ChallengeFruitKnifeRestSiteOption : RestSiteOption
         CardModel? selected = (await CardSelectCmd.FromDeckForRemoval(Owner, prefs)).FirstOrDefault();
         if (selected is null) return false;
         await ApplySelectedCard(selected);
+        Owner.RunState.Modifiers.OfType<ChallengeContract>().FirstOrDefault()?.RecordRestSiteOption(this);
         return true;
     }
 

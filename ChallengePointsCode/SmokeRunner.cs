@@ -217,11 +217,12 @@ internal sealed partial class SmokeRunner : Node
         {
             "soul" or "spirit" => "necrobinder",
             "status" => "defect",
+            "poison" => "silent",
             _ => "ironclad"
         };
         contract.ShopSchemaVersion = 1;
         bool choiceTest = mode == "choice";
-        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff" or "mixed";
+        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff" or "mixed" or "ember" or "poison";
         contract.ContractData = mode switch
         {
             "choice" => "{\"shop:ironclad:item:IT-03\":1}",
@@ -233,6 +234,8 @@ internal sealed partial class SmokeRunner : Node
             "spirit" => "{\"shop:necrobinder:squad:SQ-09\":1}",
             "status" => "{\"shop:defect:squad:SQ-05\":3}",
             "mixed" => "{\"shop:ironclad:squad:SQ-01\":1,\"shop:ironclad:squad:SQ-02\":2,\"shop:ironclad:squad:SQ-04\":1}",
+            "ember" => "{\"G-06\":1,\"shop:ironclad:squad:SQ-01\":3}",
+            "poison" => "{\"shop:silent:squad:SQ-04\":1}",
             _ => "{\"shop:ironclad:squad:SQ-07\":3}"
         };
         NGame game = NGame.Instance ?? throw new InvalidOperationException("NGame not ready for PC integration");
@@ -322,13 +325,13 @@ internal sealed partial class SmokeRunner : Node
             }
             if (mode == "light")
             {
-                for (int i = 0; i < 100 && !PileType.Hand.GetPile(player).Cards.Any(c => c is ChallengeLightVoucher); i++)
-                    await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
-                CardModel voucher = PileType.Hand.GetPile(player).Cards.First(c => c is ChallengeLightVoucher);
-                if (!ReferenceEquals(voucher.Owner, player)) throw new InvalidOperationException("SQ-02 voucher has no owner");
-                await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), voucher, null).WaitAsync(TimeSpan.FromSeconds(20));
-                if (voucher.Pile?.Type == PileType.Hand) throw new InvalidOperationException("SQ-02 voucher did not play");
-                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-02 generated voucher played in PC combat.");
+                if (!player.Deck.Cards.Any(c => c is ChallengeBandage))
+                    throw new InvalidOperationException("SQ-02 did not add Bandage to the starting deck");
+                CardModel bandage = combat.CreateCard(ModelDb.Card<ChallengeBandage>(), player);
+                await CardPileCmd.AddGeneratedCardToCombat(bandage, PileType.Hand, player);
+                await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), bandage, null).WaitAsync(TimeSpan.FromSeconds(20));
+                if (bandage.Pile?.Type == PileType.Hand) throw new InvalidOperationException("SQ-02 Bandage did not play");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-02 added Bandage to the deck and played it in PC combat.");
                 GetTree().Quit(0);
                 return;
             }
@@ -351,6 +354,32 @@ internal sealed partial class SmokeRunner : Node
                 if (contract.ShopStatusesThisTurn < 1 || !PileType.Hand.GetPile(player).Cards.Any(c => c.Id.Entry == "FUEL"))
                     throw new InvalidOperationException("SQ-05 status-generated fuel did not appear");
                 MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-05 generated fuel after status in PC combat.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "ember")
+            {
+                decimal draw = contract.ModifyHandDraw(player, 5);
+                if (draw != 7)
+                    throw new InvalidOperationException($"SQ-01 draw calculation was {draw}, expected 7 (5 base - 1 challenge + 3 squad)");
+                CardModel exhausted = combat.CreateCard(
+                    ModelDb.AllCards.First(c => c.Id.Entry == "STRIKE_IRONCLAD"), player);
+                for (int i = 0; i < 3; i++)
+                    await contract.AfterCardExhausted(new BlockingPlayerChoiceContext(), exhausted, false);
+                if (player.Creature.GetPowerAmount<StrengthPower>() != 1)
+                    throw new InvalidOperationException("SQ-01 did not grant 1 Strength after three exhausted cards");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-01 draw calculation and three-exhaust Strength trigger.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "poison")
+            {
+                Creature enemy = combat.Enemies.First();
+                int hp = enemy.CurrentHp;
+                await PowerCmd.Apply<WeakPower>(new BlockingPlayerChoiceContext(), enemy, 1, player.Creature, null);
+                if (enemy.CurrentHp != hp - 4 || enemy.GetPowerAmount<PoisonPower>() != 2)
+                    throw new InvalidOperationException($"SQ-04 debuff trigger mismatch: hp={hp}->{enemy.CurrentHp}, poison={enemy.GetPowerAmount<PoisonPower>()}");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-04 debuff trigger dealt 4 damage and added 2 Poison without recursion.");
                 GetTree().Quit(0);
                 return;
             }

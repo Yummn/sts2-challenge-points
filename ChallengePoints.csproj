@@ -13,6 +13,11 @@
   <PropertyGroup Condition="'$(Sts2TargetFlavor)' == 'mobile-v110'">
     <DefineConstants>$(DefineConstants);STS2_V110</DefineConstants>
   </PropertyGroup>
+  <!-- v0.111.0 (PC and Android) uses the same modern hook signatures. Keep
+       the legacy PC v0.107.1 build on the default branch above. -->
+  <PropertyGroup Condition="'$(Sts2TargetVersion)' == 'v111' or '$(Sts2TargetFlavor)' == 'pc-v111' or '$(Sts2TargetFlavor)' == 'mobile-v111'">
+    <DefineConstants>$(DefineConstants);STS2_V110;STS2_V111</DefineConstants>
+  </PropertyGroup>
   <ItemGroup Condition="Exists('$(Sts2DataDir)')">
     <Reference Include="0Harmony"><HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="sts2"><HintPath>$(Sts2DataDir)/sts2.dll</HintPath><Private>false</Private></Reference>

@@ -31,9 +31,35 @@ internal static class ChallengeFruitKnifeRestIconPatch
     }
 }
 
-[HarmonyPatch(typeof(RestSiteOption), nameof(RestSiteOption.OnSelect))]
+[HarmonyPatch]
 internal static class ChallengeRestSiteSelectionPatch
 {
+    private static readonly BindingFlags InstanceMethod =
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+    // v0.111.0 changed RestSiteOption.OnSelect into an abstract method.
+    // Harmony cannot prepare that base declaration, so target each concrete
+    // rest-site implementation instead. Older builds keep a concrete base
+    // implementation and remain supported through the fallback branch.
+    private static IEnumerable<MethodBase> TargetMethods()
+    {
+        MethodInfo baseMethod = typeof(RestSiteOption).GetMethod(nameof(RestSiteOption.OnSelect), InstanceMethod)
+            ?? throw new MissingMethodException(typeof(RestSiteOption).FullName, nameof(RestSiteOption.OnSelect));
+        if (!baseMethod.IsAbstract)
+        {
+            yield return baseMethod;
+            yield break;
+        }
+
+        foreach (Type type in typeof(RestSiteOption).Assembly.GetTypes())
+        {
+            if (type.IsAbstract || !typeof(RestSiteOption).IsAssignableFrom(type)) continue;
+            MethodInfo? method = type.GetMethod(nameof(RestSiteOption.OnSelect), InstanceMethod);
+            if (method is { IsAbstract: false, DeclaringType: not null } && method.DeclaringType == type)
+                yield return method;
+        }
+    }
+
     private static void Postfix(RestSiteOption __instance, Task<bool> __result)
     {
         _ = RecordAfterSelection(__instance, __result);
