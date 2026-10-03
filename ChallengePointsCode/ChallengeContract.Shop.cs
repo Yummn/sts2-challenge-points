@@ -130,6 +130,29 @@ public sealed partial class ChallengeContract
         }
     }
 
+    internal async Task ApplyEmberHandExhaust(Player player, PlayerChoiceContext context)
+    {
+        if (ShopSchemaVersion <= 0 || SquadRank("SQ-01") <= 0 ||
+            PileType.Hand.GetPile(player).Cards.Count == 0)
+            return;
+
+        CardModel? selected;
+        if (MainFile.EmberAutopickRequested)
+        {
+            // Integration-only deterministic path. Normal runs always use the
+            // selector so the player chooses the card to exhaust.
+            selected = PileType.Hand.GetPile(player).Cards.FirstOrDefault();
+        }
+        else
+        {
+            var prefs = new CardSelectorPrefs(new LocString("card_selection", "CHALLENGE_EMBER_EXHAUST"), 1);
+            selected = (await CardSelectCmd.FromHand(context, player, prefs, null, this)).FirstOrDefault();
+        }
+
+        if (selected is not null)
+            await CardCmd.Exhaust(context, selected, false, false);
+    }
+
     private async Task HandleShopStatusGenerated(CardModel card, Player creator)
     {
         int rank = SquadRank("SQ-05");

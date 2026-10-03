@@ -30,7 +30,7 @@ internal sealed partial class SmokeRunner : Node
         try
         {
             await ToSignal(GetTree().CreateTimer(12), SceneTreeTimer.SignalName.Timeout);
-            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION")))
+            if (!string.IsNullOrEmpty(MainFile.IntegrationMode))
             {
                 await RunIntegration();
                 return;
@@ -211,18 +211,18 @@ internal sealed partial class SmokeRunner : Node
 
     private async Task RunIntegration()
     {
-        string mode = System.Environment.GetEnvironmentVariable("CHALLENGE_POINTS_INTEGRATION") ?? "";
+        string mode = MainFile.IntegrationMode ?? "";
         var contract = (ChallengeContract)ModelDb.Modifier<ChallengeContract>().ToMutable();
         contract.CharacterRole = mode switch
         {
             "soul" or "spirit" => "necrobinder",
             "status" => "defect",
-            "poison" => "silent",
+            "poison" or "ember-hunter" => "silent",
             _ => "ironclad"
         };
         contract.ShopSchemaVersion = 1;
         bool choiceTest = mode == "choice";
-        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff" or "mixed" or "ember" or "poison";
+        bool battleTest = mode is "battle" or "light" or "soul" or "spirit" or "status" or "buff" or "mixed" or "ember" or "ember-hunter" or "poison";
         contract.ContractData = mode switch
         {
             "choice" => "{\"shop:ironclad:item:IT-03\":1}",
@@ -235,6 +235,7 @@ internal sealed partial class SmokeRunner : Node
             "status" => "{\"shop:defect:squad:SQ-05\":3}",
             "mixed" => "{\"shop:ironclad:squad:SQ-01\":1,\"shop:ironclad:squad:SQ-02\":2,\"shop:ironclad:squad:SQ-04\":1}",
             "ember" => "{\"G-06\":1,\"shop:ironclad:squad:SQ-01\":3}",
+            "ember-hunter" => "{\"shop:silent:squad:SQ-01\":1,\"shop:ironclad:squad:SQ-04\":4}",
             "poison" => "{\"shop:silent:squad:SQ-04\":1}",
             _ => "{\"shop:ironclad:squad:SQ-07\":3}"
         };
@@ -243,6 +244,7 @@ internal sealed partial class SmokeRunner : Node
         {
             "soul" or "spirit" => ModelDb.Character<MegaCrit.Sts2.Core.Models.Characters.Necrobinder>(),
             "status" => ModelDb.Character<MegaCrit.Sts2.Core.Models.Characters.Defect>(),
+            "ember-hunter" => ModelDb.Character<MegaCrit.Sts2.Core.Models.Characters.Silent>(),
             _ => ModelDb.Character<Ironclad>()
         };
         Task<RunState> start = game.StartNewSingleplayerRun(
@@ -359,16 +361,53 @@ internal sealed partial class SmokeRunner : Node
             }
             if (mode == "ember")
             {
+                contract.ShopExhausted = 5;
+                if (run.CurrentRoom is not CombatRoom combatRoom)
+                    throw new InvalidOperationException("SQ-01 reset test did not reach a combat room");
+                await contract.AfterRoomEntered(combatRoom);
+                if (contract.ShopExhausted != 0)
+                    throw new InvalidOperationException("SQ-01 exhaust counter was not reset at combat start");
                 decimal draw = contract.ModifyHandDraw(player, 5);
-                if (draw != 7)
-                    throw new InvalidOperationException($"SQ-01 draw calculation was {draw}, expected 7 (5 base - 1 challenge + 3 squad)");
+                if (draw != 5)
+                    throw new InvalidOperationException($"SQ-01 draw calculation was {draw}, expected 5 (5 base - 1 challenge + 1 squad)");
+                contract.ShopExhausted = 0;
                 CardModel exhausted = combat.CreateCard(
                     ModelDb.AllCards.First(c => c.Id.Entry == "STRIKE_IRONCLAD"), player);
                 for (int i = 0; i < 3; i++)
                     await contract.AfterCardExhausted(new BlockingPlayerChoiceContext(), exhausted, false);
                 if (player.Creature.GetPowerAmount<StrengthPower>() != 1)
-                    throw new InvalidOperationException("SQ-01 did not grant 1 Strength after three exhausted cards");
-                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-01 draw calculation and three-exhaust Strength trigger.");
+                    throw new InvalidOperationException("SQ-01 rank III did not grant 1 Strength after three exhausted cards");
+                if (ChallengeContract.EmberExhaustThreshold(1) != 3 || ChallengeContract.EmberExhaustThreshold(2) != 3 ||
+                    ChallengeContract.EmberExhaustThreshold(3) != 2 || ChallengeContract.EmberExhaustThreshold(4) != 2)
+                    throw new InvalidOperationException("SQ-01 exhaust thresholds are not 3/3/2/2");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: SQ-01 draw, rank III two-exhaust threshold, and rank thresholds.");
+                GetTree().Quit(0);
+                return;
+            }
+            if (mode == "ember-hunter")
+            {
+                if (contract.CharacterRole != "silent" || contract.SquadRank("SQ-01") != 1 || contract.SquadRank("SQ-04") != 0)
+                    throw new InvalidOperationException($"hunter squad scope leaked: role={contract.CharacterRole}, ember={contract.SquadRank("SQ-01")}, poison={contract.SquadRank("SQ-04")}");
+                if (!player.Deck.Cards.Any(c => c.Id.Entry == "ANGER") ||
+                    player.Deck.Cards.Any(c => c.Id.Entry == "NOXIOUS_FUMES"))
+                    throw new InvalidOperationException("hunter Ember Forge starter cards leaked or Poison starter remained");
+                decimal draw = contract.ModifyHandDraw(player, 5);
+                if (draw != 5)
+                    throw new InvalidOperationException($"hunter SQ-01 draw calculation was {draw}, expected 5 at rank I");
+                CardModel handCard = combat.CreateCard(
+                    ModelDb.AllCards.First(c => c.Id.Entry == "STRIKE_SILENT"), player);
+                await CardPileCmd.AddGeneratedCardToCombat(handCard, PileType.Hand, player);
+                int exhaustedBefore = contract.ShopExhausted;
+                await contract.AfterPlayerTurnStart(new BlockingPlayerChoiceContext(), player)
+                    .WaitAsync(TimeSpan.FromSeconds(20));
+                if (contract.ShopExhausted <= exhaustedBefore || handCard.Pile?.Type == PileType.Hand)
+                    throw new InvalidOperationException("hunter SQ-01 did not exhaust a selected hand card after hand draw");
+                Creature enemy = combat.Enemies.First();
+                int hp = enemy.CurrentHp;
+                await PowerCmd.Apply<WeakPower>(new BlockingPlayerChoiceContext(), enemy, 1, player.Creature, null);
+                if (enemy.CurrentHp != hp || enemy.GetPowerAmount<PoisonPower>() != 0)
+                    throw new InvalidOperationException("hunter SQ-01 incorrectly retained SQ-04 poison effect");
+                MainFile.Logger.Info("[ChallengePointsIntegration] PASS: Silent with SQ-01 has Anger, hand exhaust and no SQ-04 poison leakage.");
                 GetTree().Quit(0);
                 return;
             }

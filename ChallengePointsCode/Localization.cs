@@ -32,6 +32,7 @@ internal static class ChallengeLocalization
                     ["CHALLENGE_SHOP_POWER"] = "选择一张能力牌",
                     ["CHALLENGE_SHOP_START"] = "选择分队起始牌",
                     ["CHALLENGE_SHOP_ACT"] = "选择跨幕奖励牌",
+                    ["CHALLENGE_EMBER_EXHAUST"] = "选择一张手牌消耗",
                     ["CHALLENGE_SHOP_REMOVE"] = "选择要删除的牌",
                     ["CHALLENGE_SHOP_UPGRADE"] = "选择要升级的牌"
                 }
@@ -41,6 +42,7 @@ internal static class ChallengeLocalization
                     ["CHALLENGE_SHOP_POWER"] = "Choose a Power",
                     ["CHALLENGE_SHOP_START"] = "Choose a squad starter",
                     ["CHALLENGE_SHOP_ACT"] = "Choose an act reward",
+                    ["CHALLENGE_EMBER_EXHAUST"] = "Choose a card to Exhaust",
                     ["CHALLENGE_SHOP_REMOVE"] = "Choose cards to remove",
                     ["CHALLENGE_SHOP_UPGRADE"] = "Choose a card to upgrade"
                 });

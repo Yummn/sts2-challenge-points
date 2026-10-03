@@ -31,6 +31,8 @@ namespace ChallengePoints;
 // its counters are serialized by the game's own run-save pipeline.
 public sealed partial class ChallengeContract : ModifierModel
 {
+    internal static int EmberExhaustThreshold(int rank) => rank >= 3 ? 2 : 3;
+
     private Dictionary<string, int>? _ranks;
 
     [SavedProperty] public string ContractData { get; set; } = "{}";
@@ -99,10 +101,20 @@ public sealed partial class ChallengeContract : ModifierModel
             ? 1 : x.CpPerRank));
     internal int RoleCp => ChallengeCatalog.All.Where(x => x.Role == CharacterRole).Sum(x => Rank(x.Id) * x.CpPerRank);
 
+    private void SyncCharacterRole(RunState runState)
+    {
+        if (runState.Players.FirstOrDefault() is not { } player) return;
+        string actualRole = ChallengeCatalog.NormalizeRole(player.Character.Id.Entry);
+        if (!string.Equals(CharacterRole, actualRole, StringComparison.Ordinal))
+            MainFile.Logger.Info($"[ChallengePoints] role corrected on run load: {CharacterRole} -> {actualRole}.");
+        CharacterRole = actualRole;
+    }
+
     protected override void AfterRunCreated(RunState runState)
     {
         ChallengeLocalization.Ensure();
         ChallengeShopCards.EnsurePools();
+        SyncCharacterRole(runState);
         if (ShopSchemaVersion > 0 && Rank($"shop:{CharacterRole}:squad:SQ-08") > 0 && RandomSquadId.Length == 0)
         {
             var pool = ChallengeShopCatalog.Squads.Where(s => s.Id != "SQ-08").ToArray();
@@ -139,6 +151,7 @@ public sealed partial class ChallengeContract : ModifierModel
     {
         ChallengeLocalization.Ensure();
         ChallengeShopCards.EnsurePools();
+        SyncCharacterRole(runState);
         foreach (Player player in runState.Players) AttachPlayerEvents(player);
     }
 
@@ -326,7 +339,7 @@ public sealed partial class ChallengeContract : ModifierModel
         if (turn == 1 && CharacterRole == "silent" && Rank("SL-01") > 0) count = Math.Max(0, count - 1);
         if (ShopSchemaVersion > 0)
         {
-            if (SquadRank("SQ-01") > 0) count += SquadRank("SQ-01") >= 2 ? 3 : 2;
+            if (SquadRank("SQ-01") >= 2) count += 1;
             if (SquadRank("SQ-02") > 0) count += 1;
             if (SquadRank("SQ-09") >= 4) count += 1;
         }
@@ -496,7 +509,8 @@ public sealed partial class ChallengeContract : ModifierModel
 
     public override async Task AfterCardExhausted(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext context, CardModel card, bool causedByEthereal)
     {
-        if (ShopSchemaVersion > 0 && SquadRank("SQ-01") >= 3 && ++ShopExhausted % 3 == 0)
+        int emberRank = ShopSchemaVersion > 0 ? SquadRank("SQ-01") : 0;
+        if (emberRank > 0 && ++ShopExhausted % EmberExhaustThreshold(emberRank) == 0)
             await PowerCmd.Apply<StrengthPower>(context, card.Owner.Creature, 1, null, null);
         if (CharacterRole == "ironclad")
         {
@@ -835,6 +849,17 @@ public sealed partial class ChallengeContract : ModifierModel
                     await PowerCmd.ModifyAmount(context, doom, -5, null, null);
     }
 
+    public override Task BeforeHandDrawLate(Player player, MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext choiceContext, ICombatState combatState)
+    {
+        return Task.CompletedTask;
+    }
+
+    public override async Task AfterPlayerTurnStart(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext choiceContext, Player player)
+    {
+        if (ShopSchemaVersion > 0)
+            await ApplyEmberHandExhaust(player, choiceContext);
+    }
+
     public override Task AfterEnergyReset(Player player)
     {
         if (CharacterRole == "necrobinder" && Rank("NB-07") > 0 && VoidExhaustedThisTurn)
@@ -1031,14 +1056,6 @@ public sealed partial class ChallengeContract : ModifierModel
     public override async Task AfterEnergySpent(CardModel card, int amount)
     {
         if (ShopSchemaVersion <= 0 || amount <= 0) return;
-        if (SquadRank("SQ-01") > 0)
-        {
-            int before = ShopEnergySpent / 3;
-            ShopEnergySpent += amount;
-            int gained = ShopEnergySpent / 3 - before;
-            if (gained > 0)
-                await PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), card.Owner.Creature, gained, null, card);
-        }
         if (SquadRank("SQ-10") > 0)
             await ForgeCmd.Forge(amount * 3m, card.Owner, this);
     }

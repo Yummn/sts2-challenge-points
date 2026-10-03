@@ -12,8 +12,8 @@ internal static class ChallengeShopCatalog
     // Prices are cumulative totals, not per-tier supplements. Rank IV includes I–III.
     internal static readonly IReadOnlyList<ChallengeSquad> Squads = new[]
     {
-        new ChallengeSquad("SQ-01", "余烬经销", "ironclad", new[] { 60, 70, 80, 100 },
-            new[] { "获得1张愤怒。每回合多抽2张牌，失去1生命；每花费3能量，获得1力量。", "+每回合多抽1张牌。", "+每消耗3张牌，获得1力量。", "不再因本分队在回合开始失去1生命。" }),
+        new ChallengeSquad("SQ-01", "余烬熔炉", "ironclad", new[] { 60, 70, 80, 100 },
+            new[] { "获得1张愤怒。每回合开始失去1生命，选择1张手牌消耗；每消耗3张牌，获得1力量。", "+每回合多抽1张牌。", "每消耗2张牌，获得1力量。", "不再因本分队在回合开始失去1生命。" }),
         new ChallengeSquad("SQ-02", "向死而生", "ironclad", new[] { 50, 60, 70, 90 },
             new[] { "每回合开始失去2生命，抽1张牌；每回合第一张能力牌免费，但打出时失去4生命。", "开局将1张包扎加入牌组。", "+战斗结束时回复本战斗失去生命的50%。", "回复比例提高至60%。" }),
         new ChallengeSquad("SQ-03", "极限卡组", "necrobinder", new[] { 60, 70, 90, 110 },
